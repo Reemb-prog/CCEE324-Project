@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "default",
+    "disableBypassPermissionsMode": "disable",
+    "disableAutoMode": "disable",
+    "allow": [
+      "Bash(python scripts/harness.py verify)",
+      "Bash(python scripts/harness.py status)",
+      "Bash(python scripts/harness.py task)"
+    ],
+    "deny": [
+      "WebFetch",
+      "WebSearch",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(pip *)",
+      "Bash(python -m pip *)",
+      "Bash(git push *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean *)",
+      "Bash(rm -rf *)",
+      "Bash(gh *)",
+      "Bash(npm *)",
+      "Bash(claude *)",
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
+  }
+}

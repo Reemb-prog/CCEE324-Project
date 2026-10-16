@@ -1,0 +1,19 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "autoAllowBashIfSandboxed": false,
+    "allowUnsandboxedCommands": false,
+    "network": { "allowedDomains": [] },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws", "mode": "deny" }
+      ],
+      "envVars": [
+        { "name": "ANTHROPIC_API_KEY", "mode": "deny" },
+        { "name": "GITHUB_TOKEN", "mode": "deny" }
+      ]
+    }
+  }
+}

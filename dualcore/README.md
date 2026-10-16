@@ -1,0 +1,1 @@
+These components are intentionally *not* implemented in the starter ZIP. Claude adds `isa.py`, `registers.py`, `control.py`, `alu.py`, `memory.py`, `core.py`, `processor.py`, and `demo.py` under approved milestones. The `tests/` directory is a fixed acceptance contract.
