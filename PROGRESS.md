@@ -5,8 +5,8 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 | Stage | Expected state at delivery |
 |---|---|
 | 01 ISA/datapath | Approved |
-| 02 ALU/single core | Done, awaiting human approval |
-| 03 two independent cores | TODO |
+| 02 ALU/single core | Approved |
+| 03 two independent cores | Done, awaiting human approval |
 | 04 shared memory | TODO |
 | 05 bonus instructions | TODO |
 | 06 report/demo | TODO |
@@ -31,3 +31,11 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 - **Decisions:** PC is a program-list index that advances by 1 (CLAUDE.md / ISA.md, replacing MIPS PC+4). HALT sets `halted` and freezes PC on the HALT index; later steps are no-op events (ISA.md). LOAD/STORE raise `NotImplementedError` inside the core until stage 04, as task 02 allows; `SharedMemory` and their control signals already exist.
 - **Tests:** `python scripts/harness.py verify` → integrity OK (13 protected files), stages 01–02: **10 run, 10 passed, 0 failed**.
 - **Limitations:** one core only; no memory access from programs yet; no processor/tick (stage 03).
+
+### [STAGE 03] Two independent cores on one conceptual clock
+
+- **Files built:** `dualcore/processor.py` (`DualCoreProcessor` with `cores`, `memory`, `cycles`, `tick()`, `run(max_cycles)`).
+- **CO concept:** a multicore processor replicates the whole core (PC, register file, decoder/control, ALU, instruction program) while sharing one data memory; a common clock gives each active core one instruction per cycle.
+- **Decisions:** `tick()` steps core 0 then core 1 in plain Python — no threads (CLAUDE.md / COURSE_BOUNDARY.md). A halted core's step is a no-op, so the other keeps running (ISA.md). `cycles` counts every tick; `run()` raises `RuntimeError` if both cores have not halted within `max_cycles` ticks of that call (INTERFACES.md). The shared memory object is created and passed to both cores, but snapshot/buffered STORE commits are left to stage 04.
+- **Tests:** `python scripts/harness.py verify` → integrity OK (13 protected files), stages 01–03: **12 run, 12 passed, 0 failed**.
+- **Limitations:** programs still cannot use LOAD/STORE (stage 04), so the cores do not yet communicate through memory.
