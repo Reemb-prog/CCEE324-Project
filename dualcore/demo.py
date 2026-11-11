@@ -216,14 +216,16 @@ def explain_step(event: dict, regs_before: tuple[int, ...], core) -> list[str]:
         lines.append(f"halt     core stops; PC frozen at {core.pc}")
         return lines
     if d.mnemonic == "LOAD":
+        lines.append(f"ALU      address = R0 + {d.address} = {d.address}  (ALUSrc=1: address field as input B)")
         lines.append(f"memory   read mem[{d.address}] = {event['result']} (MemRead=1)")
         lines.append(f"write    R{d.rd} <- {event['result']}  (MemtoReg=1: memory data, not ALU)")
     elif d.mnemonic == "STORE":
+        lines.append(f"ALU      address = R0 + {d.address} = {d.address}  (ALUSrc=1: address field as input B)")
         lines.append(f"read     R{d.rs} = {event['stored']}")
         lines.append(f"memory   buffer mem[{d.address}] <- {event['stored']} "
                      f"(MemWrite=1, committed at end of tick)")
     elif d.mnemonic == "LOADI":
-        lines.append(f"ALU      PASS imm {d.immediate} ({d.immediate:08b})  (ALUSrc=1: immediate as input B)")
+        lines.append(f"ALU      R0 + {d.immediate} = {event['result']}  (ALUSrc=1: immediate as input B)")
         lines.append(f"write    R{d.rd} <- {event['result']}  (MemtoReg=0: ALU result)")
     elif d.mnemonic == "NOT":
         a = regs_before[d.rs]
@@ -338,34 +340,33 @@ VERDICT = 62     # core 1's if/else answer
 
 def build_branch_processor() -> DualCoreProcessor:
     # Core 0: sum = 1 + 2 + 3 + 4 + 5 with a while loop, then publish it.
+    # R0 is hard-wired to 0, so "BEQ Rx, R0" means "branch if Rx is zero".
     program0 = [
-        encode_imm("LOADI", 0, 0),            #  0: no effect: R0 is hard-wired to 0
-        encode_imm("LOADI", 1, 1),            #  1: i = 1
-        encode_imm("LOADI", 2, 6),            #  2: limit = 6
-        encode_imm("LOADI", 3, 0),            #  3: sum = 0
-        encode_imm("LOADI", 5, 1),            #  4: constant 1
-        encode_r("SLT", 4, 1, 2),             #  5: top: R4 = (i < limit)
-        encode_branch("BEQ", 4, 0, 3),        #  6: if R4 == 0 exit loop -> 10
-        encode_r("ADD", 3, 3, 1),             #  7: sum += i
-        encode_r("ADD", 1, 1, 5),             #  8: i += 1
-        encode_jump(5),                       #  9: back to top
-        encode_mem("STORE", 3, SUM_ADDR),     # 10: mem[60] = sum
-        encode_mem("STORE", 5, FLAG_ADDR),    # 11: mem[61] = 1 (ready flag, after the data)
-        encode_halt(),                        # 12
+        encode_imm("LOADI", 1, 1),            #  0: i = 1
+        encode_imm("LOADI", 2, 6),            #  1: limit = 6
+        encode_imm("LOADI", 3, 0),            #  2: sum = 0
+        encode_imm("LOADI", 5, 1),            #  3: constant 1
+        encode_r("SLT", 4, 1, 2),             #  4: top: R4 = (i < limit)
+        encode_branch("BEQ", 4, 0, 3),        #  5: if R4 == 0 exit loop -> 9
+        encode_r("ADD", 3, 3, 1),             #  6: sum += i
+        encode_r("ADD", 1, 1, 5),             #  7: i += 1
+        encode_jump(4),                       #  8: back to top
+        encode_mem("STORE", 3, SUM_ADDR),     #  9: mem[60] = sum
+        encode_mem("STORE", 5, FLAG_ADDR),    # 10: mem[61] = 1 (ready flag, after the data)
+        encode_halt(),                        # 11
     ]
     # Core 1: wait for the flag, then: if sum < 20 then verdict = 1 else verdict = 0.
     program1 = [
-        encode_imm("LOADI", 0, 0),            #  0: no effect: R0 is hard-wired to 0
-        encode_mem("LOAD", 1, FLAG_ADDR),     #  1: wait: R1 = flag
-        encode_branch("BEQ", 1, 0, -2),       #  2: while flag == 0 -> 1
-        encode_mem("LOAD", 2, SUM_ADDR),      #  3: R2 = sum
-        encode_slti(3, 2, 20),                #  4: R3 = (sum < 20)
-        encode_branch("BEQ", 3, 0, 2),        #  5: if not -> else at 8
-        encode_imm("LOADI", 4, 1),            #  6: then: verdict = 1
-        encode_jump(9),                       #  7: skip else
-        encode_imm("LOADI", 4, 0),            #  8: else: verdict = 0
-        encode_mem("STORE", 4, VERDICT),      #  9: mem[62] = verdict
-        encode_halt(),                        # 10
+        encode_mem("LOAD", 1, FLAG_ADDR),     #  0: wait: R1 = flag
+        encode_branch("BEQ", 1, 0, -2),       #  1: while flag == 0 -> 0
+        encode_mem("LOAD", 2, SUM_ADDR),      #  2: R2 = sum
+        encode_slti(3, 2, 20),                #  3: R3 = (sum < 20)
+        encode_branch("BEQ", 3, 0, 2),        #  4: if not -> else at 7
+        encode_imm("LOADI", 4, 1),            #  5: then: verdict = 1
+        encode_jump(8),                       #  6: skip else
+        encode_imm("LOADI", 4, 0),            #  7: else: verdict = 0
+        encode_mem("STORE", 4, VERDICT),      #  8: mem[62] = verdict
+        encode_halt(),                        #  9
     ]
     return DualCoreProcessor(program0, program1)
 

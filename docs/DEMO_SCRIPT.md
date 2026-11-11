@@ -35,10 +35,10 @@ Walk through the output top to bottom:
 python -m dualcore.demo -b
 ```
 
-- **Core 0, ticks 6-32:** a `while` loop. `SLT` tests i < 6 and `BEQ ... +3` exits when it is false; `J 5` jumps back. Watch R3 grow 1, 3, 6, 10, 15.
-- **Core 1, at the same time:** a spin-wait. `LOAD R1, [61]` then `BEQ R1, R0, -2` ("taken -> PC=1") repeat until core 0's flag store becomes visible (tick 36).
-- **Then an `if/else`:** `SLTI R3, R2, 20` gives 1, so `BEQ` is "not taken", the *then* path runs, and `J 9` skips the *else*.
-- Link to the lecture: BEQ uses ALUSrc=0, ALUOp=Subtract, Branch=1, and the ALU's zero result picks the next PC.
+- **Core 0, ticks 5-31:** a `while` loop. `SLT` tests i < 6 and `BEQ ... +3` exits when it is false; `J 4` jumps back. Watch R3 grow 1, 3, 6, 10, 15.
+- **Core 1, at the same time:** a spin-wait. `LOAD R1, [61]` then `BEQ R1, R0, -2` ("taken -> PC=0") repeat until core 0's flag store (tick 33) becomes visible (tick 35).
+- **Then an `if/else`:** `SLTI R3, R2, 20` gives 1, so `BEQ` is "not taken", the *then* path runs, and `J 8` skips the *else*.
+- Link to the lecture: BEQ uses ALUSrc=0, ALUOp=Subtract, Branch=1, and the ALU's Zero output picks the next PC. R0 is hard-wired to 0 (like `$zero`), so `BEQ R1, R0` means "branch if R1 is zero".
 
 ## 3. Show the ALU live (about 1–2 min, optional)
 
@@ -46,7 +46,7 @@ python -m dualcore.demo -b
 python -m dualcore.demo "200 + 100" "3 - 5"
 ```
 
-- Each core LOADs its operands, runs one ALU instruction, and STOREs the result. The control signals are printed for every step; compare them with the lecture control table.
+- Each core LOADs its operands, runs one ALU instruction, and STOREs the result. The control signals are printed for every step; compare them with the lecture control table. LOAD/STORE show `ALUSrc=1 ALUOp=ADD`: the ALU computes the address R0 + imm8, exactly like `lw $t0, 100($zero)`.
 - `200 + 100 = 44`: the carry out of bit 7 is dropped.
 - `3 - 5 = 254`: `11111110` is −2 in two's complement.
 
@@ -69,3 +69,4 @@ python -m dualcore.demo -i
 - **Same-address STORE conflict?** Commits happen core 0 then core 1, so core 1's value remains (tested).
 - **Why is the branch offset only -8 to +7?** The 16-bit word must also hold the opcode, a kind code and two registers; J covers long jumps.
 - **Why LOADI and NOT?** LOADI lets programs set constants and shows immediate operands. NOT adds one more bitwise ALU operation.
+- **Which control signals are not from the lecture?** Only BranchNe (for BNE). Jump is the textbook's extension for `j`; everything else is the lecture table, and LOAD/STORE/BEQ match the lw/sw/beq columns except RegDst.

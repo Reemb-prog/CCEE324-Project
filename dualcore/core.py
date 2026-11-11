@@ -7,6 +7,10 @@ from .isa import decode
 from .memory import SharedMemory
 from .registers import RegisterFile
 
+# I-format instructions with an 8-bit immediate have no Rs field, so the Rs
+# read address is 000 and ALU input A is R0 (always 0), as with MIPS $zero.
+_BASE_R0 = ("LOAD", "STORE", "LOADI")
+
 
 class Core:
     def __init__(self, program: Sequence[int]) -> None:
@@ -15,6 +19,10 @@ class Core:
         self.halted = False
         self.registers = RegisterFile()
         self.control = ControlUnit()
+
+    def _read(self, index: int) -> int:
+        """Register-file read port. R0 is hard-wired to zero (like MIPS $zero)."""
+        return 0 if index == 0 else self.registers.read(index)
 
     def step(self, memory: SharedMemory) -> dict:
         """Execute exactly one instruction (fetch, decode, execute, writeback, next PC)."""
@@ -36,39 +44,39 @@ class Core:
             return {"pc": pc, "word": word, "mnemonic": "HALT", "halted": True}
 
         event = {"pc": pc, "word": word, "mnemonic": decoded.mnemonic, "halted": False}
+        uses_memory = signals.mem_read or signals.mem_write
 
-        # Register read + execute. ALUSrc picks ALU input B: 0 = register Rt,
-        # 1 = the immediate (LOADI imm8, SLTI imm6); unary NOT has ALUSrc=X and
-        # ignores B. LOADI's PASS ignores input A. LOAD/STORE/J need no ALU.
+        # Register read + ALU. Input A = Rs (R0 for LOAD/STORE/LOADI).
+        # ALUSrc picks input B: 0 = register Rt, 1 = the immediate (the address
+        # for LOAD/STORE, imm8 for LOADI, imm6 for SLTI). Unary NOT ignores B.
         alu_result = None
         if signals.alu_op is not None:
-            a = self.registers.read(decoded.rs)
+            a = self._read(0 if decoded.mnemonic in _BASE_R0 else decoded.rs)
             if signals.alu_src is True:
-                b = decoded.immediate
+                b = decoded.address if uses_memory else decoded.immediate
             elif signals.alu_src is False:
-                b = self.registers.read(decoded.rt)
+                b = self._read(decoded.rt)
             else:
                 b = 0
             alu_result = alu_execute(signals.alu_op, a, b)
 
-        # Memory access: the address comes straight from instruction bits [8:1]
+        # Memory access at the ALU result (R0 + address = address).
         mem_data = None
         if signals.mem_read:
-            mem_data = memory.read(decoded.address)
-            event["address"] = decoded.address
+            mem_data = memory.read(alu_result)
+            event["address"] = alu_result
         if signals.mem_write:
-            stored = self.registers.read(decoded.rs)
-            memory.write(decoded.address, stored)
-            event.update(address=decoded.address, stored=stored)
+            stored = self._read(decoded.rs)
+            memory.write(alu_result, stored)
+            event.update(address=alu_result, stored=stored)
 
         # Writeback mux: MemtoReg picks memory data (1) or the ALU result (0).
-        # RegDst=1 selects Rd. R0 is hard-wired to zero (like MIPS $zero):
-        # an instruction's write to R0 is discarded.
+        # RegDst=1 selects Rd. A write to R0 is discarded (hard-wired zero).
         if signals.reg_write:
             write_data = mem_data if signals.mem_to_reg else alu_result
             if decoded.rd != 0:
                 self.registers.write(decoded.rd, write_data)
-            event.update(rd=decoded.rd, result=self.registers.read(decoded.rd))
+            event.update(rd=decoded.rd, result=self._read(decoded.rd))
 
         # Next PC (PCSrc mux): jump target, taken-branch target, or PC + 1.
         # A branch is taken when the ALU's Rs - Rt result is zero (BEQ) or

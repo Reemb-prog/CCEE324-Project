@@ -60,7 +60,7 @@ def encode_r(mnemonic: str, rd: int, rs: int, rt: int = 0) -> int:
 
 
 def encode_mem(mnemonic: str, reg: int, address: int) -> int:
-    """Encode LOAD (reg is Rd) or STORE (reg is Rs) with an 8-bit absolute address."""
+    """Encode LOAD (reg is Rd) or STORE (reg is Rs) with an 8-bit address (base R0 = 0)."""
     if mnemonic not in ("LOAD", "STORE"):
         raise ValueError(f"not a memory instruction: {mnemonic!r}")
     _check_range("reg", reg, 0, 7)

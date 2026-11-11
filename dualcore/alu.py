@@ -1,4 +1,4 @@
-"""ALU: the eight required 8-bit operations plus bonus NOT. All inputs and results are 0..255."""
+"""ALU: the eight required 8-bit operations plus bonus NOT and SLT. All inputs and results are 0..255."""
 
 MASK = 0xFF  # keep only the low 8 bits, like an 8-bit hardware result bus
 
@@ -12,11 +12,7 @@ _OPERATIONS = {
     "SLL": lambda a, b: (a << b) & MASK,     # bits shifted past bit 7 are lost
     "SRL": lambda a, b: a >> b,              # logical: zeros shift in from the left
     "NOT": lambda a, b: ~a & MASK,           # bonus, unary: input b is ignored
-    "SLT": lambda a, b: 1 if a < b else 0,   # stage 07: unsigned compare
-    # Internal ALU function, not an instruction: result = input B. LOADI uses
-    # it to carry its immediate through the ALU (it has no Rs field: bits [8:6]
-    # belong to imm8, so there is no register to OR the immediate with).
-    "PASS": lambda a, b: b,
+    "SLT": lambda a, b: 1 if a < b else 0,   # bonus: unsigned compare (like MIPS sltu)
 }
 
 
