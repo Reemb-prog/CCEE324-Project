@@ -35,21 +35,32 @@ class Core:
             self.halted = True          # PC stays frozen on the HALT instruction
             return {"pc": pc, "word": word, "mnemonic": "HALT", "halted": True}
 
-        if signals.mem_read or signals.mem_write:
-            raise NotImplementedError("LOAD/STORE execution is added in stage 04")
+        event = {"pc": pc, "word": word, "mnemonic": decoded.mnemonic, "halted": False}
 
-        # Register read: ALUSrc=0, so ALU input B is register Rt
-        a = self.registers.read(decoded.rs)
-        b = self.registers.read(decoded.rt)
+        # Register read + execute: ALUSrc=0, so ALU input B is register Rt.
+        # LOAD/STORE leave alu_op unset: their absolute address needs no ALU.
+        alu_result = None
+        if signals.alu_op is not None:
+            a = self.registers.read(decoded.rs)
+            b = self.registers.read(decoded.rt)
+            alu_result = alu_execute(signals.alu_op, a, b)
 
-        # Execute
-        result = alu_execute(signals.alu_op, a, b)
+        # Memory access: the address comes straight from instruction bits [8:1]
+        mem_data = None
+        if signals.mem_read:
+            mem_data = memory.read(decoded.address)
+            event["address"] = decoded.address
+        if signals.mem_write:
+            stored = self.registers.read(decoded.rs)
+            memory.write(decoded.address, stored)
+            event.update(address=decoded.address, stored=stored)
 
-        # Writeback: MemtoReg=0 selects the ALU result; RegDst=1 selects Rd
+        # Writeback: MemtoReg picks memory data (1) or ALU result (0); RegDst=1 selects Rd
         if signals.reg_write:
-            self.registers.write(decoded.rd, result)
+            write_data = mem_data if signals.mem_to_reg else alu_result
+            self.registers.write(decoded.rd, write_data)
+            event.update(rd=decoded.rd, result=write_data)
 
         # Next PC: no branches, so always PC + 1
         self.pc = pc + 1
-        return {"pc": pc, "word": word, "mnemonic": decoded.mnemonic,
-                "rd": decoded.rd, "result": result, "halted": False}
+        return event

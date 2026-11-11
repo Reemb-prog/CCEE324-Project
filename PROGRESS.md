@@ -6,8 +6,8 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 |---|---|
 | 01 ISA/datapath | Approved |
 | 02 ALU/single core | Approved |
-| 03 two independent cores | Done, awaiting human approval |
-| 04 shared memory | TODO |
+| 03 two independent cores | Approved |
+| 04 shared memory | Done, awaiting human approval |
 | 05 bonus instructions | TODO |
 | 06 report/demo | TODO |
 
@@ -39,3 +39,11 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 - **Decisions:** `tick()` steps core 0 then core 1 in plain Python — no threads (CLAUDE.md / COURSE_BOUNDARY.md). A halted core's step is a no-op, so the other keeps running (ISA.md). `cycles` counts every tick; `run()` raises `RuntimeError` if both cores have not halted within `max_cycles` ticks of that call (INTERFACES.md). The shared memory object is created and passed to both cores, but snapshot/buffered STORE commits are left to stage 04.
 - **Tests:** `python scripts/harness.py verify` → integrity OK (13 protected files), stages 01–03: **12 run, 12 passed, 0 failed**.
 - **Limitations:** programs still cannot use LOAD/STORE (stage 04), so the cores do not yet communicate through memory.
+
+### [STAGE 04] Shared memory, LOAD/STORE, terminal demo
+
+- **Files built/changed:** `dualcore/core.py` (LOAD/STORE executed via the control signals: MemRead/MemWrite, MemtoReg mux), `dualcore/memory.py` (private `_TickMemoryPort`: snapshot reads, buffered writes), `dualcore/processor.py` (`tick()` snapshot → step both → commit core 0 then core 1), new `dualcore/demo.py` (`python -m dualcore.demo`).
+- **CO concept:** a shared data memory as the only communication path between cores with private registers; a clocked state update where all reads in a cycle see the old state and writes take effect at the clock edge.
+- **Decisions:** snapshot/commit order and "core 1 wins same-address conflicts" come from ISA.md's clock rule (a simulation choice, not a physical arbitration model). A standalone `Core.step(SharedMemory)` still reads/writes immediately (ISA.md). Demo registers are preset directly because LOADI is a stage-05 bonus.
+- **Tests:** `python scripts/harness.py verify` → integrity OK (13 protected files), stages 01–04: **15 run, 15 passed, 0 failed**. `python -m dualcore.demo` → 7/7 built-in checks PASS, exit code 0.
+- **Limitations:** no LOADI/NOT yet (stage 05); the demo is a first version that stage 06 may polish.

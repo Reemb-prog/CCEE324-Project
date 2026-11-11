@@ -2,7 +2,7 @@
 from typing import Optional, Sequence
 
 from .core import Core
-from .memory import SharedMemory
+from .memory import SharedMemory, _TickMemoryPort
 
 
 class DualCoreProcessor:
@@ -17,9 +17,17 @@ class DualCoreProcessor:
         """One clock tick: every non-halted core executes exactly one instruction.
 
         The cores are stepped one after the other in plain Python; this models
-        "both cores act in the same cycle" without real threads.
+        "both cores act in the same cycle" without real threads. Both cores
+        read the same pre-tick memory snapshot, and their STOREs are committed
+        at the end of the tick, core 0 first, then core 1 (so core 1 wins a
+        same-address conflict). New values are readable from the next tick.
         """
-        events = tuple(core.step(self.memory) for core in self.cores)
+        snapshot = self.memory.snapshot()
+        ports = [_TickMemoryPort(snapshot) for _ in self.cores]
+        events = tuple(core.step(port) for core, port in zip(self.cores, ports))
+        for port in ports:
+            for address, value in port.pending:
+                self.memory.write(address, value)
         self.cycles += 1
         return events
 
