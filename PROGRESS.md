@@ -9,7 +9,8 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 | 03 two independent cores | Approved |
 | 04 shared memory | Approved |
 | 05 bonus instructions | Approved |
-| 06 report/demo | Done, awaiting human review |
+| 06 report/demo | Approved |
+| 07 branching extension (branch `branching`) | Done, awaiting human approval |
 
 ## Checkpoints
 
@@ -52,7 +53,8 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 
 - **Files changed:** `dualcore/isa.py` (I-form LOADI opcode 1010, U-form NOT opcode 1011; reserved-opcode rejection removed; unused-bit checks), `dualcore/alu.py` (`NOT`), `dualcore/control.py` (LOADI/NOT signals + new `imm_to_reg`), `dualcore/core.py` (writeback mux: immediate / memory / ALU; NOT ignores ALU input B), `dualcore/demo.py` (scripted demo now initializes registers with LOADI and uses NOT; display helpers for the two new formats), `docs/ARCHITECTURE.md` (control table extended).
 - **CO concept:** immediate operands (a constant encoded inside the instruction word) and a unary bitwise ALU operation; adding an instruction means adding a decoder case, a control-table column and, if needed, a datapath path.
-- **Decisions:** field layouts and opcodes from ISA.md; only these two bonuses (PDF / CLAUDE.md). `ImmToReg` as a third writeback-mux input is an implementation choice, since the immediate comes from neither the ALU nor memory (documented in ARCHITECTURE.md). The 11 required opcodes are unchanged.
+- **Decisions:** field layouts and opcodes from ISA.md; only these two bonuses (PDF / CLAUDE.md). The 11 required opcodes are unchanged.
+- **Revision (later, human request, on branch `branching`):** LOADI originally used a third writeback-mux input `ImmToReg`. It now goes through the ALU instead (ALUSrc=1, ALUOp=PASS, MemtoReg=0, where PASS is an internal ALU function: result = input B), and `ImmToReg` is removed. This matches the lecture datapath and shares SLTI's immediate path. Re-verified: 32/32 tests pass, and the scripted and branch demo outputs are identical.
 - **Tests:** `python scripts/harness.py verify` → integrity OK (13 protected files), stages 01–05: **17 run, 17 passed, 0 failed**. `python -m dualcore.demo` → 9/9 checks PASS, exit 0; expression mode `python -m dualcore.demo "200 + 100" "3 - 5"` exit 0.
 - **Limitations:** the expression mode still loads operands from memory rather than LOADI, and does not accept NOT expressions (kept as written by the team).
 
@@ -63,3 +65,14 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 - **Decisions:** the report labels each rule as PDF requirement or design choice. The deliverables list was read from `reference/CCEE324_Project_Instructions.pdf` (text extracted with the Python standard library; no tools installed).
 - **Tests:** `python scripts/harness.py verify` → integrity OK (13 protected files), stages 01–06: **19 run, 19 passed, 0 failed**; `python -m unittest discover -s tests` → 19 OK. `python -m dualcore.demo` → 9/9 PASS, exit 0; `python -m dualcore.demo "200 + 100" "3 - 5"` → exit 0; `"1 + 999"` → rejected, exit 2.
 - **Limitations:** simulator only (no HDL or timing); no branches, flags, pipeline or cache; the cores are stepped one after the other within a tick; no assembler. Final submission readiness is the team's decision.
+
+### [STAGE 07] Extension: SLT, SLTI, BEQ, BNE, J (if / while)
+
+- **Contract (written first, reviewed by the team before implementation):** `tasks/07_branching.md`, ISA addendum in `docs/ISA.md`, API additions in `docs/INTERFACES.md`, scope note in `docs/COURSE_BOUNDARY.md`, 13 tests in `tests/test_stage_07.py`; stage registered in `scripts/harness.py`, hashes refreshed in `contracts.sha256` (tests 01–06 byte-identical), CLAUDE.md rules updated. Work is on git branch `branching`; `master` keeps the six-stage submission.
+- **Files changed:** `dualcore/isa.py` (opcode 1101 SLT, 1110 SLTI, 1100 group BEQ/BNE/J; `offset` field; `encode_slti`, `encode_branch`, `encode_jump`), `dualcore/alu.py` (`SLT`), `dualcore/control.py` (`branch`, `branch_ne`, `jump`; SLTI uses ALUSrc=1), `dualcore/core.py` (ALUSrc mux for the immediate; next-PC mux), `dualcore/demo.py` (`-b` branch demo, display helpers), report/results/demo script/architecture table.
+- **CO concept:** control flow in a single-cycle datapath: the ALU subtracts, its zero result plus the Branch signal drive the PCSrc mux, branch target = PC + 1 + offset (index analogue of PC + 4 + offset<<2), Jump selects an absolute target.
+- **Decisions (team-chosen):** proposed encoding (offset −8..+7, J target 0..255, SLTI imm 0..63, kind 00 invalid so `0xC000` stays illegal); unsigned comparisons; separate git branch; tests reviewed before implementation.
+- **Tests:** `python scripts/harness.py verify` → integrity OK (14 protected files), stages 01–07: **32 run, 32 passed, 0 failed**. `python -m dualcore.demo -b` → 5/5 PASS, exit 0 (44 ticks); `python -m dualcore.demo` 9/9 PASS; expression mode exit 0.
+- **Limitations:** short branch range (J needed for long jumps); no procedure calls/stack, flags or interrupts; FINAL_REPORT prose grew to ~1,630 words (slightly over the ~1,600 guideline).
+- **Revisions (human requests, on branch `branching`):** (1) LOADI now goes through the ALU (ALUSrc=1, ALUOp=PASS, MemtoReg=0) and `ImmToReg` is removed. (2) R0 is hard-wired to zero for programs: the core discards instruction writes to R0, and `RegisterFile.write(0, …)` stays a direct test-setup path so the protected stage-01 test still holds. The ISA rule was amended, one test was added to `tests/test_stage_07.py`, and `contracts.sha256` was refreshed. Re-verified: **33 run, 33 passed, 0 failed**; all three demo outputs are byte-identical to before.
+- **Final alignment review (human request, before approval):** see `docs/DESIGN_REVIEW.md`. LOAD/STORE/LOADI now compute `R0 + imm8` in the ALU (ALUSrc=1, ALUOp=ADD), matching the lecture's lw/sw columns. The internal PASS function is removed, and the core also reads R0 as 0. Formats are relabelled R/I/J with no bit changes. The no-op `LOADI R0, 0` was removed from the branch demo (now 43 ticks). FINAL_REPORT, ARCHITECTURE (full datapath diagram), ISA, INTERFACES, COURSE_BOUNDARY, DEMO_SCRIPT and `dualcore/README.md` were rewritten for the final scope; RESULTS was regenerated and `contracts.sha256` refreshed. Re-verified: **33 run, 33 passed, 0 failed**. Scripted demo 9/9, branch demo 5/5, expression mode exit 0.

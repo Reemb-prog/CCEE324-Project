@@ -16,6 +16,7 @@ STAGES=(
     '04_sharedmemory.md',
     '05_bonus.md',
     '06_delivery.md',
+    '07_branching.md',  # human-approved extension: SLT, SLTI, BEQ, BNE, J
 )
 
 

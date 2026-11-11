@@ -6,6 +6,8 @@ Run with:
     python -m dualcore.demo "3 + 4"          compile and trace one expression on core 0
     python -m dualcore.demo "3 + 4" "9 - 2"  one expression per core, run side by side
     python -m dualcore.demo -i               type expressions at a prompt
+    python -m dualcore.demo -b               stage-07 branch demo: while loop, cross-core
+                                             spin-wait, if/else (SLT, SLTI, BEQ, J)
     python -m dualcore.demo -h               show this help
 
 Expression operators: + - & | ^ nor << >>  (operands 0..255, decimal, 0x.. or 0b..)
@@ -15,7 +17,8 @@ import sys
 from typing import Optional
 
 from .control import ControlUnit
-from .isa import decode, encode_halt, encode_imm, encode_mem, encode_r
+from .isa import (decode, encode_branch, encode_halt, encode_imm, encode_jump,
+                  encode_mem, encode_r, encode_slti)
 from .processor import DualCoreProcessor
 
 MAILBOX = 100   # core 0 writes here, core 1 reads it
@@ -36,6 +39,12 @@ def describe(word: int) -> str:
         return f"LOADI R{d.rd}, {d.immediate}"
     if d.mnemonic == "NOT":
         return f"NOT   R{d.rd}, R{d.rs}"
+    if d.mnemonic == "SLTI":
+        return f"SLTI  R{d.rd}, R{d.rs}, {d.immediate}"
+    if d.mnemonic in ("BEQ", "BNE"):
+        return f"{d.mnemonic:<5} R{d.rs}, R{d.rt}, {d.offset:+d}"
+    if d.mnemonic == "J":
+        return f"J     {d.address}"
     return f"{d.mnemonic:<5} R{d.rd}, R{d.rs}, R{d.rt}"
 
 
@@ -173,6 +182,13 @@ def fields(word: int) -> str:
         return f"{op} {d.rd:03b} {d.immediate:08b} 0      (opcode | rd | immediate | 0)"
     if d.mnemonic == "NOT":
         return f"{op} {d.rd:03b} {d.rs:03b} 000000      (opcode | rd | rs | unused)"
+    if d.mnemonic == "SLTI":
+        return f"{op} {d.rd:03b} {d.rs:03b} {d.immediate:06b}      (opcode | rd | rs | imm6)"
+    if d.mnemonic in ("BEQ", "BNE"):
+        kind = "01" if d.mnemonic == "BEQ" else "10"
+        return f"{op} {kind} {d.rs:03b} {d.rt:03b} {d.offset & 0xF:04b}   (opcode | kind | rs | rt | offset)"
+    if d.mnemonic == "J":
+        return f"{op} 11 00 {d.address:08b}     (opcode | kind | 00 | target)"
     return f"{op} {d.rd:03b} {d.rs:03b} {d.rt:03b} 000     (opcode | rd | rs | rt | unused)"
 
 
@@ -183,8 +199,9 @@ def _bit(value: Optional[bool]) -> str:
 def show_control(word: int) -> str:
     s = ControlUnit().signals(decode(word))
     return (f"RegDst={_bit(s.reg_dst)} ALUSrc={_bit(s.alu_src)} MemtoReg={_bit(s.mem_to_reg)} "
-            f"ImmToReg={_bit(s.imm_to_reg)} RegWrite={_bit(s.reg_write)} MemRead={_bit(s.mem_read)} "
-            f"MemWrite={_bit(s.mem_write)} ALUOp={s.alu_op or 'X'}")
+            f"RegWrite={_bit(s.reg_write)} MemRead={_bit(s.mem_read)} "
+            f"MemWrite={_bit(s.mem_write)} Branch={_bit(s.branch)} BranchNe={_bit(s.branch_ne)} "
+            f"Jump={_bit(s.jump)} ALUOp={s.alu_op or 'X'}")
 
 
 def explain_step(event: dict, regs_before: tuple[int, ...], core) -> list[str]:
@@ -199,14 +216,17 @@ def explain_step(event: dict, regs_before: tuple[int, ...], core) -> list[str]:
         lines.append(f"halt     core stops; PC frozen at {core.pc}")
         return lines
     if d.mnemonic == "LOAD":
+        lines.append(f"ALU      address = R0 + {d.address} = {d.address}  (ALUSrc=1: address field as input B)")
         lines.append(f"memory   read mem[{d.address}] = {event['result']} (MemRead=1)")
         lines.append(f"write    R{d.rd} <- {event['result']}  (MemtoReg=1: memory data, not ALU)")
     elif d.mnemonic == "STORE":
+        lines.append(f"ALU      address = R0 + {d.address} = {d.address}  (ALUSrc=1: address field as input B)")
         lines.append(f"read     R{d.rs} = {event['stored']}")
         lines.append(f"memory   buffer mem[{d.address}] <- {event['stored']} "
                      f"(MemWrite=1, committed at end of tick)")
     elif d.mnemonic == "LOADI":
-        lines.append(f"write    R{d.rd} <- {d.immediate}  (ImmToReg=1: immediate from the instruction)")
+        lines.append(f"ALU      R0 + {d.immediate} = {event['result']}  (ALUSrc=1: immediate as input B)")
+        lines.append(f"write    R{d.rd} <- {event['result']}  (MemtoReg=0: ALU result)")
     elif d.mnemonic == "NOT":
         a = regs_before[d.rs]
         lines.append(f"read     R{d.rs} = {a} ({a:08b})")
@@ -309,6 +329,100 @@ def interactive() -> int:
             print(f"error: {error}")
 
 
+# ---------------------------------------------------------------------------
+# Branch mode (stage 07): while loop, cross-core spin-wait, if/else
+# ---------------------------------------------------------------------------
+
+SUM_ADDR = 60    # core 0's loop result
+FLAG_ADDR = 61   # core 0 sets this to 1 when the result is ready
+VERDICT = 62     # core 1's if/else answer
+
+
+def build_branch_processor() -> DualCoreProcessor:
+    # Core 0: sum = 1 + 2 + 3 + 4 + 5 with a while loop, then publish it.
+    # R0 is hard-wired to 0, so "BEQ Rx, R0" means "branch if Rx is zero".
+    program0 = [
+        encode_imm("LOADI", 1, 1),            #  0: i = 1
+        encode_imm("LOADI", 2, 6),            #  1: limit = 6
+        encode_imm("LOADI", 3, 0),            #  2: sum = 0
+        encode_imm("LOADI", 5, 1),            #  3: constant 1
+        encode_r("SLT", 4, 1, 2),             #  4: top: R4 = (i < limit)
+        encode_branch("BEQ", 4, 0, 3),        #  5: if R4 == 0 exit loop -> 9
+        encode_r("ADD", 3, 3, 1),             #  6: sum += i
+        encode_r("ADD", 1, 1, 5),             #  7: i += 1
+        encode_jump(4),                       #  8: back to top
+        encode_mem("STORE", 3, SUM_ADDR),     #  9: mem[60] = sum
+        encode_mem("STORE", 5, FLAG_ADDR),    # 10: mem[61] = 1 (ready flag, after the data)
+        encode_halt(),                        # 11
+    ]
+    # Core 1: wait for the flag, then: if sum < 20 then verdict = 1 else verdict = 0.
+    program1 = [
+        encode_mem("LOAD", 1, FLAG_ADDR),     #  0: wait: R1 = flag
+        encode_branch("BEQ", 1, 0, -2),       #  1: while flag == 0 -> 0
+        encode_mem("LOAD", 2, SUM_ADDR),      #  2: R2 = sum
+        encode_slti(3, 2, 20),                #  3: R3 = (sum < 20)
+        encode_branch("BEQ", 3, 0, 2),        #  4: if not -> else at 7
+        encode_imm("LOADI", 4, 1),            #  5: then: verdict = 1
+        encode_jump(8),                       #  6: skip else
+        encode_imm("LOADI", 4, 0),            #  7: else: verdict = 0
+        encode_mem("STORE", 4, VERDICT),      #  8: mem[62] = verdict
+        encode_halt(),                        #  9
+    ]
+    return DualCoreProcessor(program0, program1)
+
+
+def show_short(core, event: dict) -> str:
+    if event["mnemonic"] is None:
+        return "(halted)"
+    text = f"PC={event['pc']:>2} {describe(event['word']):<17}"
+    if "taken" in event:
+        text += f" {'taken -> PC=' + str(core.pc) if event['taken'] else 'not taken'}"
+    elif event["mnemonic"] == "J":
+        text += f" jump -> PC={core.pc}"
+    elif "stored" in event:
+        text += f" mem[{event['address']}] <- {event['stored']}"
+    elif "result" in event:
+        text += f" R{event['rd']} <- {event['result']}"
+    return text
+
+
+def run_branch_demo() -> int:
+    cpu = build_branch_processor()
+    print("Branch demo: while loop on core 0, spin-wait + if/else on core 1")
+    for core_id, core in enumerate(cpu.cores):
+        print(f"\nProgram {core_id}:")
+        for index, word in enumerate(core.program):
+            print(f"  {index:>2}: {word:016b}  {describe(word)}")
+
+    print("\nExecution (one line per tick):")
+    flag_reads = 0
+    while not all(core.halted for core in cpu.cores):
+        events = cpu.tick()
+        e1 = events[1]
+        if e1["mnemonic"] == "LOAD" and e1["address"] == FLAG_ADDR and e1["result"] == 0:
+            flag_reads += 1
+        cols = [show_short(core, event) for core, event in zip(cpu.cores, events)]
+        print(f"  tick {cpu.cycles:>2} | core0 {cols[0]:<40} | core1 {cols[1]}")
+        if cpu.cycles > 200:
+            raise RuntimeError("branch demo did not finish")
+
+    c0, c1 = cpu.cores
+    mem = cpu.memory
+    print(f"\nFinal: mem[{SUM_ADDR}]={mem.read(SUM_ADDR)} mem[{FLAG_ADDR}]={mem.read(FLAG_ADDR)} "
+          f"mem[{VERDICT}]={mem.read(VERDICT)}  after {cpu.cycles} ticks")
+    checks = [
+        ("while loop: core 0 summed 1..5 = 15", mem.read(SUM_ADDR) == 15 and c0.registers.read(1) == 6),
+        (f"spin-wait: core 1 read flag = 0 {flag_reads} times before seeing 1", flag_reads > 1),
+        ("core 1 read core 0's sum only after the flag", c1.registers.read(2) == 15),
+        ("if/else: 15 < 20 so the 'then' branch set verdict = 1", mem.read(VERDICT) == 1),
+        ("both cores halted", c0.halted and c1.halted),
+    ]
+    print("\nVerification:")
+    for text, ok in checks:
+        print(f"  [{'PASS' if ok else 'FAIL'}] {text}")
+    return 0 if all(ok for _, ok in checks) else 1
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if not args:
@@ -316,6 +430,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args[0] in ("-h", "--help"):
         print(__doc__)
         return 0
+    if args[0] in ("-b", "--branch"):
+        return run_branch_demo()
     if args[0] in ("-i", "--interactive"):
         return interactive()
     if len(args) > 2:
