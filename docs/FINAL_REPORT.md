@@ -47,7 +47,7 @@ Opcodes 0000–0111 are the ALU operations in the PDF's order, then 1000 LOAD, 1
 - `3 − 5 = 254`: subtraction is two's-complement addition, `3 + (~5 + 1)`, and `11111110` is −2 read as signed.
 - Shifts use the value in Rt; a shift of 8 or more gives 0. SRL is logical, so zeros come in from the left.
 
-There is no flag register (no carry or zero flag) because there are no branches to use one.
+There is no flag register. The stage-07 branches use the ALU's zero result directly in the same cycle, as in the lecture datapath. Stage 07 also adds `SLT` (1 if a < b, unsigned).
 
 ## 5. Register-file design (deliverable 5)
 
@@ -72,7 +72,7 @@ Three differences from MIPS follow from our ISA (design choices, explained in `d
 
 - RegDst is always 1, because the destination register is always in bits 11–9.
 - ALUSrc and ALUOp are X for LOAD/STORE, because an absolute address needs no ALU addition.
-- There is no Branch/PCSrc, because the course scope excludes branches.
+- Branch/PCSrc arrived only with the stage-07 extension (section 10b).
 
 ## 7. Single-core implementation (deliverable 7)
 
@@ -84,7 +84,7 @@ Three differences from MIPS follow from our ISA (design choices, explained in `d
 4. **ALU** executes `ALUOp`.
 5. **Memory** read or write if MemRead/MemWrite is set.
 6. **Writeback** to Rd through the mux: immediate if ImmToReg, memory data if MemtoReg, otherwise the ALU result.
-7. **Next PC** = PC + 1.
+7. **Next PC** = PC + 1, or a branch/jump target after stage 07 (section 10b).
 
 The PC is an index into the instruction list, so it advances by **1, not MIPS PC + 4** (design choice): instructions sit in a Python list, not byte-addressed memory. On **HALT** the core sets `halted`, the PC stays on the HALT instruction, and later steps do nothing (PDF: "stop when HALT is encountered").
 
@@ -104,16 +104,39 @@ So a value stored in tick *n* becomes visible from tick *n + 1*, and if both cor
 
 ## 10. Bonus instructions
 
-The brief allows extra instructions; we added exactly two:
+The brief allows extra instructions. The original bonus added exactly two:
 
 - **LOADI Rd, imm8** lets a program create its own constants. Without it, register values must come from Python test setup or from memory. It also introduces the immediate-operand idea. Because the constant comes from neither the ALU nor memory, the writeback mux gets a third input selected by the new **ImmToReg** signal (design choice, similar to the extra path MIPS extensions add for `lui`).
 - **NOT Rd, Rs** adds one more bitwise ALU function at minimal cost. It is unary, so ALU input B is don't-care: `NOT 47 = 208` (`00101111 → 11010000`).
 
 The 11 basic opcodes are unchanged.
 
+## 10b. Stage 07 extension: branches and jump (SLT, SLTI, BEQ, BNE, J)
+
+After the six original stages, the team asked for control flow so programs can express `if` and `while`. This was added on a separate git branch as a seventh harness stage with its own tests. Only three opcodes were free, so (design choice) 1101 = SLT, 1110 = SLTI (imm 0-63), and 1100 is a group selected by bits [11:10]:
+
+| Kind | Instruction | Effect |
+|---|---|---|
+| 01 | BEQ Rs, Rt, offset | taken if Rs == Rt |
+| 10 | BNE Rs, Rt, offset | taken if Rs != Rt |
+| 11 | J target | PC = target (0-255) |
+| 00 | invalid | keeps `0xC000` illegal |
+
+A taken branch goes to PC + 1 + offset, where offset is a 4-bit signed number (-8 to +7). This is the index version of the lecture's PC + 4 + (offset << 2). BEQ/BNE follow the lecture's beq control column: ALUSrc = 0, ALUOp = Subtract, Branch = 1, and the ALU's zero result feeds the PCSrc mux. Two signals are new: **BranchNe** inverts the zero test for BNE, and **Jump** selects the J target. SLTI is the first instruction to use ALUSrc = 1 (immediate as ALU input B).
+
+Comparisons are unsigned, consistent with the rest of the ISA. R0 is not hard-wired to zero, so programs load 0 into a register before comparing against it.
+
+The new `python -m dualcore.demo -b` runs three patterns:
+
+1. A `while` loop on core 0 sums 1 to 5 = 15 and stores it.
+2. Core 0 then sets a ready flag, while core 1 **spin-waits**, re-reading the flag with LOAD + BEQ (17 reads of 0) until the clock rule makes it visible.
+3. Core 1 then runs an `if/else` with SLTI.
+
+The short offset range means a loop body can be at most about 8 instructions away from its branch. Longer code uses J, which reaches anywhere.
+
 ## 11. Simulation results and test evidence (deliverable 10)
 
-The automated **test** suite has 19 unit tests across six stages and runs via `python scripts/harness.py verify`. Before running, the harness also checks the hashes of 13 protected test and spec files. The observed results and full demo output are copied in `docs/RESULTS.md`. The tests cover:
+The automated **test** suite has 32 unit tests across seven stages (19 for the original six, 13 for the stage-07 extension) and runs via `python scripts/harness.py verify`. Before running, the harness also checks the hashes of 14 protected test and spec files. The observed results and full demo output are copied in `docs/RESULTS.md`. The tests cover:
 
 - encoding, decoding and rejection of invalid words;
 - register isolation;
@@ -122,6 +145,7 @@ The automated **test** suite has 19 unit tests across six stages and runs via `p
 - independent cores and the cycle count;
 - memory bounds, next-tick visibility and the same-address conflict;
 - both bonus instructions;
+- stage-07 encoding and control signals, `if`, `while`, backward loops, out-of-program targets, and a cross-core spin-wait with an exact tick count;
 - the presence of these deliverables.
 
 The scripted demo (`python -m dualcore.demo`) prints 9 PASS checks. Core 0 computes 25 + 17 = 42 and STOREs it in tick 4. Core 1's LOAD in tick 4 still reads 0, its LOAD in tick 5 reads 42, and it then writes 47 and NOT 47 = 208 to memory.
@@ -133,6 +157,6 @@ The scripted demo (`python -m dualcore.demo`) prints 9 PASS checks. Core 0 compu
 ## 13. Limitations
 
 - It is a simulator, not HDL hardware, with no timing or gate-level detail.
-- There are no branches, jumps, flags, interrupts, pipelining, hazards or cache. These are excluded by the course scope, so programs run straight through to HALT.
+- There are no flags, interrupts, pipelining, hazards or cache, which the course scope excludes. Control flow is limited to the stage-07 BEQ/BNE (short -8 to +7 offsets) and J. There are no procedure calls or stack.
 - The cores run one after the other inside each tick, not truly in parallel. The snapshot/commit rule replaces real memory arbitration.
 - LOAD/STORE use absolute addresses only. Programs are written in Python with the encoder functions; there is no assembler.

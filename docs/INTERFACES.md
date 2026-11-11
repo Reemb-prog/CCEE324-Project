@@ -14,3 +14,10 @@ Create these files in `dualcore/`; no extra dependencies:
 * `demo.py`: executable via `python -m dualcore.demo`, runs two understandable, different programs and prints states/memory and verification; no UI.
 
 Design is small enough for a student to explain each component in the live presentation. Typed dataclasses are optional. Use simple integer bit masks/shifts and explicit booleans. Do **not** rename the public API just to satisfy a style preference.
+
+## Stage 07 additions (extension)
+
+* `isa.py`: `DecodedInstruction` gains `offset` (signed int, default 0) for BEQ/BNE. J stores its target in `address`; SLTI stores its constant in `immediate`. New functions: `encode_slti(rd, rs, value) -> int` (value 0..63), `encode_branch(mnemonic, rs, rt, offset) -> int` (mnemonic BEQ/BNE, offset −8..7), `encode_jump(target) -> int` (target 0..255). `encode_r` also accepts `"SLT"`.
+* `alu.py`: `alu_execute("SLT", a, b)` returns 1 if `a < b` (unsigned) else 0.
+* `control.py`: `ControlSignals` gains booleans `branch` (BEQ or BNE), `branch_ne` (BNE: branch when the ALU result is nonzero) and `jump` (J), all default False. BEQ/BNE: `alu_op="SUB"`, `alu_src=False`, `reg_write=False`. SLT: `alu_op="SLT"`, `alu_src=False`, `reg_write=True`. SLTI: `alu_op="SLT"`, `alu_src=True`, `reg_write=True`. J: `jump=True`, no register or memory writes.
+* `core.py`: `step()` selects the next PC: jump target, taken-branch target `PC+1+offset`, or `PC+1`. Event dicts may include `"taken"` (bool) for branches.

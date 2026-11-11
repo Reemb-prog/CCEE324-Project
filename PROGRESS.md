@@ -9,7 +9,8 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 | 03 two independent cores | Approved |
 | 04 shared memory | Approved |
 | 05 bonus instructions | Approved |
-| 06 report/demo | Done, awaiting human review |
+| 06 report/demo | Approved |
+| 07 branching extension (branch `branching`) | Done, awaiting human approval |
 
 ## Checkpoints
 
@@ -63,3 +64,12 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 - **Decisions:** the report labels each rule as PDF requirement or design choice. The deliverables list was read from `reference/CCEE324_Project_Instructions.pdf` (text extracted with the Python standard library; no tools installed).
 - **Tests:** `python scripts/harness.py verify` → integrity OK (13 protected files), stages 01–06: **19 run, 19 passed, 0 failed**; `python -m unittest discover -s tests` → 19 OK. `python -m dualcore.demo` → 9/9 PASS, exit 0; `python -m dualcore.demo "200 + 100" "3 - 5"` → exit 0; `"1 + 999"` → rejected, exit 2.
 - **Limitations:** simulator only (no HDL or timing); no branches, flags, pipeline or cache; the cores are stepped one after the other within a tick; no assembler. Final submission readiness is the team's decision.
+
+### [STAGE 07] Extension: SLT, SLTI, BEQ, BNE, J (if / while)
+
+- **Contract (written first, reviewed by the team before implementation):** `tasks/07_branching.md`, ISA addendum in `docs/ISA.md`, API additions in `docs/INTERFACES.md`, scope note in `docs/COURSE_BOUNDARY.md`, 13 tests in `tests/test_stage_07.py`; stage registered in `scripts/harness.py`, hashes refreshed in `contracts.sha256` (tests 01–06 byte-identical), CLAUDE.md rules updated. Work is on git branch `branching`; `master` keeps the six-stage submission.
+- **Files changed:** `dualcore/isa.py` (opcode 1101 SLT, 1110 SLTI, 1100 group BEQ/BNE/J; `offset` field; `encode_slti`, `encode_branch`, `encode_jump`), `dualcore/alu.py` (`SLT`), `dualcore/control.py` (`branch`, `branch_ne`, `jump`; SLTI uses ALUSrc=1), `dualcore/core.py` (ALUSrc mux for the immediate; next-PC mux), `dualcore/demo.py` (`-b` branch demo, display helpers), report/results/demo script/architecture table.
+- **CO concept:** control flow in a single-cycle datapath: the ALU subtracts, its zero result plus the Branch signal drive the PCSrc mux, branch target = PC + 1 + offset (index analogue of PC + 4 + offset<<2), Jump selects an absolute target.
+- **Decisions (team-chosen):** proposed encoding (offset −8..+7, J target 0..255, SLTI imm 0..63, kind 00 invalid so `0xC000` stays illegal); unsigned comparisons; separate git branch; tests reviewed before implementation.
+- **Tests:** `python scripts/harness.py verify` → integrity OK (14 protected files), stages 01–07: **32 run, 32 passed, 0 failed**. `python -m dualcore.demo -b` → 5/5 PASS, exit 0 (44 ticks); `python -m dualcore.demo` 9/9 PASS; expression mode exit 0.
+- **Limitations:** short branch range (J needed for long jumps); no procedure calls/stack, flags or interrupts; R0 is not hard-wired zero; FINAL_REPORT prose grew to ~1,630 words (slightly over the ~1,600 guideline).

@@ -4,13 +4,13 @@ Everything below was copied from real local runs on Windows 11 with Python 3.12 
 
 ## 1. Test suite
 
-Command: `python scripts/harness.py verify` (integrity check of the 13 protected test/spec files, then stages 01–06).
+Command: `python scripts/harness.py verify` (integrity check of the 14 protected test/spec files, then stages 01–07).
 
 Exit code 0. Full output:
 
 ```text
-Integrity OK: 13 protected files
-Testing stages 01..06 with C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe
+Integrity OK: 14 protected files
+Testing stages 01..07 with C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe
 test_all_required_opcodes (tests.test_stage_01.TestDatapath.test_all_required_opcodes) ... ok
 test_control_signals (tests.test_stage_01.TestDatapath.test_control_signals) ... ok
 test_invalid_encoding (tests.test_stage_01.TestDatapath.test_invalid_encoding) ... ok
@@ -30,14 +30,29 @@ test_bonus_invalid (tests.test_stage_05.TestBonus.test_bonus_invalid) ... ok
 test_encode_and_execute (tests.test_stage_05.TestBonus.test_encode_and_execute) ... ok
 test_report_mentions_required_concepts (tests.test_stage_06.TestDeliverables.test_report_mentions_required_concepts) ... ok
 test_reports_are_nonempty (tests.test_stage_06.TestDeliverables.test_reports_are_nonempty) ... ok
+test_control_signals (tests.test_stage_07.TestAluAndControl.test_control_signals) ... ok
+test_slt_is_unsigned (tests.test_stage_07.TestAluAndControl.test_slt_is_unsigned) ... ok
+test_backward_bne_countdown (tests.test_stage_07.TestControlFlow.test_backward_bne_countdown) ... ok
+test_branch_not_taken_falls_through (tests.test_stage_07.TestControlFlow.test_branch_not_taken_falls_through) ... ok
+test_cross_core_spin_wait (tests.test_stage_07.TestControlFlow.test_cross_core_spin_wait)
+Core 1 polls shared memory until core 0's STORE becomes visible. ... ok
+test_if_skips_when_equal (tests.test_stage_07.TestControlFlow.test_if_skips_when_equal) ... ok
+test_out_of_program_target_and_infinite_loop (tests.test_stage_07.TestControlFlow.test_out_of_program_target_and_infinite_loop) ... ok
+test_slti_if_else (tests.test_stage_07.TestControlFlow.test_slti_if_else) ... ok
+test_while_loop_sum (tests.test_stage_07.TestControlFlow.test_while_loop_sum)
+sum = 0; i = 1; while (i < 6) { sum += i; i++ }  ->  sum = 15. ... ok
+test_decode_round_trip (tests.test_stage_07.TestEncoding.test_decode_round_trip) ... ok
+test_earlier_opcodes_unchanged (tests.test_stage_07.TestEncoding.test_earlier_opcodes_unchanged) ... ok
+test_exact_bit_patterns (tests.test_stage_07.TestEncoding.test_exact_bit_patterns) ... ok
+test_invalid_words_and_operands (tests.test_stage_07.TestEncoding.test_invalid_words_and_operands) ... ok
 
 ----------------------------------------------------------------------
-Ran 19 tests in 0.065s
+Ran 32 tests in 0.036s
 
 OK
 ```
 
-**Summary: 19 run, 19 passed, 0 failed.** `python -m unittest discover -s tests` gives the same 19 tests.
+**Summary: 32 run, 32 passed, 0 failed** (19 from the original six stages, 13 from the stage-07 extension).
 
 Per-stage coverage:
 
@@ -49,6 +64,7 @@ Per-stage coverage:
 | 04 | 3 | 256-byte bounds, STORE visible to the other core only on the next tick, same-address conflict (core 1 wins) |
 | 05 | 2 | LOADI/NOT encoding, immediate 255, NOT masking, a program using both, invalid bonus operands |
 | 06 | 2 | Deliverable files exist and the report covers required concepts |
+| 07 | 13 | Extension: SLT/SLTI/BEQ/BNE/J bit patterns and invalid words, unsigned SLT, control signals, if, while (sum 1..5), backward BNE loop, out-of-program target, infinite-loop budget, cross-core spin-wait (exactly 6 ticks) |
 
 ## 2. Scripted dual-core demo
 
@@ -165,3 +181,96 @@ Command: `python -m dualcore.demo "200 + 100" "3 - 5"` (exit code 0). Excerpt (t
 ```
 
 Invalid input is rejected: `python -m dualcore.demo "1 + 999"` printed `error: 999 does not fit in 8 bits (0..255)` and exited with code 2.
+
+## 4. Branch demo (stage 07 extension)
+
+Command: `python -m dualcore.demo -b` (exit code 0). Full output (trailing spaces trimmed):
+
+```text
+Branch demo: while loop on core 0, spin-wait + if/else on core 1
+
+Program 0:
+   0: 1010000000000000  LOADI R0, 0
+   1: 1010001000000010  LOADI R1, 1
+   2: 1010010000001100  LOADI R2, 6
+   3: 1010011000000000  LOADI R3, 0
+   4: 1010101000000010  LOADI R5, 1
+   5: 1101100001010000  SLT   R4, R1, R2
+   6: 1100011000000011  BEQ   R4, R0, +3
+   7: 0000011011001000  ADD   R3, R3, R1
+   8: 0000001001101000  ADD   R1, R1, R5
+   9: 1100110000000101  J     5
+  10: 1001011001111000  STORE R3, [60]
+  11: 1001101001111010  STORE R5, [61]
+  12: 1111000000000000  HALT
+
+Program 1:
+   0: 1010000000000000  LOADI R0, 0
+   1: 1000001001111010  LOAD  R1, [61]
+   2: 1100010010001110  BEQ   R1, R0, -2
+   3: 1000010001111000  LOAD  R2, [60]
+   4: 1110011010010100  SLTI  R3, R2, 20
+   5: 1100010110000010  BEQ   R3, R0, +2
+   6: 1010100000000010  LOADI R4, 1
+   7: 1100110000001001  J     9
+   8: 1010100000000000  LOADI R4, 0
+   9: 1001100001111100  STORE R4, [62]
+  10: 1111000000000000  HALT
+
+Execution (one line per tick):
+  tick  1 | core0 PC= 0 LOADI R0, 0       R0 <- 0          | core1 PC= 0 LOADI R0, 0       R0 <- 0
+  tick  2 | core0 PC= 1 LOADI R1, 1       R1 <- 1          | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick  3 | core0 PC= 2 LOADI R2, 6       R2 <- 6          | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick  4 | core0 PC= 3 LOADI R3, 0       R3 <- 0          | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick  5 | core0 PC= 4 LOADI R5, 1       R5 <- 1          | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick  6 | core0 PC= 5 SLT   R4, R1, R2  R4 <- 1          | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick  7 | core0 PC= 6 BEQ   R4, R0, +3  not taken        | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick  8 | core0 PC= 7 ADD   R3, R3, R1  R3 <- 1          | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick  9 | core0 PC= 8 ADD   R1, R1, R5  R1 <- 2          | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 10 | core0 PC= 9 J     5           jump -> PC=5     | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 11 | core0 PC= 5 SLT   R4, R1, R2  R4 <- 1          | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 12 | core0 PC= 6 BEQ   R4, R0, +3  not taken        | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 13 | core0 PC= 7 ADD   R3, R3, R1  R3 <- 3          | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 14 | core0 PC= 8 ADD   R1, R1, R5  R1 <- 3          | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 15 | core0 PC= 9 J     5           jump -> PC=5     | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 16 | core0 PC= 5 SLT   R4, R1, R2  R4 <- 1          | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 17 | core0 PC= 6 BEQ   R4, R0, +3  not taken        | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 18 | core0 PC= 7 ADD   R3, R3, R1  R3 <- 6          | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 19 | core0 PC= 8 ADD   R1, R1, R5  R1 <- 4          | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 20 | core0 PC= 9 J     5           jump -> PC=5     | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 21 | core0 PC= 5 SLT   R4, R1, R2  R4 <- 1          | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 22 | core0 PC= 6 BEQ   R4, R0, +3  not taken        | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 23 | core0 PC= 7 ADD   R3, R3, R1  R3 <- 10         | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 24 | core0 PC= 8 ADD   R1, R1, R5  R1 <- 5          | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 25 | core0 PC= 9 J     5           jump -> PC=5     | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 26 | core0 PC= 5 SLT   R4, R1, R2  R4 <- 1          | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 27 | core0 PC= 6 BEQ   R4, R0, +3  not taken        | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 28 | core0 PC= 7 ADD   R3, R3, R1  R3 <- 15         | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 29 | core0 PC= 8 ADD   R1, R1, R5  R1 <- 6          | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 30 | core0 PC= 9 J     5           jump -> PC=5     | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 31 | core0 PC= 5 SLT   R4, R1, R2  R4 <- 0          | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 32 | core0 PC= 6 BEQ   R4, R0, +3  taken -> PC=10   | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 33 | core0 PC=10 STORE R3, [60]    mem[60] <- 15    | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 34 | core0 PC=11 STORE R5, [61]    mem[61] <- 1     | core1 PC= 1 LOAD  R1, [61]    R1 <- 0
+  tick 35 | core0 PC=12 HALT                               | core1 PC= 2 BEQ   R1, R0, -2  taken -> PC=1
+  tick 36 | core0 (halted)                                 | core1 PC= 1 LOAD  R1, [61]    R1 <- 1
+  tick 37 | core0 (halted)                                 | core1 PC= 2 BEQ   R1, R0, -2  not taken
+  tick 38 | core0 (halted)                                 | core1 PC= 3 LOAD  R2, [60]    R2 <- 15
+  tick 39 | core0 (halted)                                 | core1 PC= 4 SLTI  R3, R2, 20  R3 <- 1
+  tick 40 | core0 (halted)                                 | core1 PC= 5 BEQ   R3, R0, +2  not taken
+  tick 41 | core0 (halted)                                 | core1 PC= 6 LOADI R4, 1       R4 <- 1
+  tick 42 | core0 (halted)                                 | core1 PC= 7 J     9           jump -> PC=9
+  tick 43 | core0 (halted)                                 | core1 PC= 9 STORE R4, [62]    mem[62] <- 1
+  tick 44 | core0 (halted)                                 | core1 PC=10 HALT
+
+Final: mem[60]=15 mem[61]=1 mem[62]=1  after 44 ticks
+
+Verification:
+  [PASS] while loop: core 0 summed 1..5 = 15
+  [PASS] spin-wait: core 1 read flag = 0 17 times before seeing 1
+  [PASS] core 1 read core 0's sum only after the flag
+  [PASS] if/else: 15 < 20 so the 'then' branch set verdict = 1
+  [PASS] both cores halted
+```
+
+What it shows: core 0's `while` loop (SLT, BEQ exit, J back) sums 1..5 = 15. Core 1 spin-waits with LOAD + BEQ and reads flag = 0 seventeen times. Core 0's flag STORE in tick 34 becomes visible in tick 36: in tick 34 itself core 1 still reads 0 (same-tick rule) and in tick 35 it is branching. Core 1 then reads the sum and its SLTI `if/else` takes the *then* path.

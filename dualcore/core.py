@@ -37,13 +37,18 @@ class Core:
 
         event = {"pc": pc, "word": word, "mnemonic": decoded.mnemonic, "halted": False}
 
-        # Register read + execute: ALUSrc=0, so ALU input B is register Rt
-        # (unary NOT has ALUSrc=X and ignores B). LOAD/STORE/LOADI leave
-        # alu_op unset: they need no ALU.
+        # Register read + execute. ALUSrc picks ALU input B: 0 = register Rt,
+        # 1 = the immediate (SLTI); unary NOT has ALUSrc=X and ignores B.
+        # LOAD/STORE/LOADI/J leave alu_op unset: they need no ALU.
         alu_result = None
         if signals.alu_op is not None:
             a = self.registers.read(decoded.rs)
-            b = self.registers.read(decoded.rt) if signals.alu_src is False else 0
+            if signals.alu_src is True:
+                b = decoded.immediate
+            elif signals.alu_src is False:
+                b = self.registers.read(decoded.rt)
+            else:
+                b = 0
             alu_result = alu_execute(signals.alu_op, a, b)
 
         # Memory access: the address comes straight from instruction bits [8:1]
@@ -66,6 +71,16 @@ class Core:
             self.registers.write(decoded.rd, write_data)
             event.update(rd=decoded.rd, result=write_data)
 
-        # Next PC: no branches, so always PC + 1
-        self.pc = pc + 1
+        # Next PC (PCSrc mux): jump target, taken-branch target, or PC + 1.
+        # A branch is taken when the ALU's Rs - Rt result is zero (BEQ) or
+        # nonzero (BNE) -- the "Zero" output in the lecture datapath.
+        if signals.jump:
+            self.pc = decoded.address
+        elif signals.branch:
+            zero = alu_result == 0
+            taken = zero != signals.branch_ne
+            self.pc = pc + 1 + decoded.offset if taken else pc + 1
+            event["taken"] = taken
+        else:
+            self.pc = pc + 1
         return event

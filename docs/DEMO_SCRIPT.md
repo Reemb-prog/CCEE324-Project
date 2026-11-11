@@ -9,9 +9,9 @@ python scripts/harness.py verify
 ```
 
 Point out:
-- **"Integrity OK: 13 protected files":** the tests were not edited.
-- **"Ran 19 tests … OK":** all stages pass.
-- The test names map to the milestones: datapath (01), ALU and single core (02), two cores (03), shared memory (04), bonus (05), deliverables (06).
+- **"Integrity OK: 14 protected files":** the tests were not edited.
+- **"Ran 32 tests (19 original + 13 stage-07 extension) … OK":** all stages pass.
+- The test names map to the milestones: datapath (01), ALU and single core (02), two cores (03), shared memory (04), bonus (05), deliverables (06), branching extension (07).
 
 ## 2. Run the dual-core program (about 2 min)
 
@@ -28,6 +28,17 @@ Walk through the output top to bottom:
 5. **Ticks 6–10, separate PCs:** core 0 shows "halted, PC stays 4" while core 1's PC keeps going 5, 6, 7, 8, 9. Before this both PCs held equal numbers, but they were always two separate PC registers.
 6. **Bonus:** the LOADIs at the start set registers without Python help. `NOT R7, R6` turns 47 into 208.
 7. **Verification:** 9 × PASS.
+
+## 2b. Branches and loops (stage 07 extension, about 1-2 min)
+
+```bash
+python -m dualcore.demo -b
+```
+
+- **Core 0, ticks 6-32:** a `while` loop. `SLT` tests i < 6 and `BEQ ... +3` exits when it is false; `J 5` jumps back. Watch R3 grow 1, 3, 6, 10, 15.
+- **Core 1, at the same time:** a spin-wait. `LOAD R1, [61]` then `BEQ R1, R0, -2` ("taken -> PC=1") repeat until core 0's flag store becomes visible (tick 36).
+- **Then an `if/else`:** `SLTI R3, R2, 20` gives 1, so `BEQ` is "not taken", the *then* path runs, and `J 9` skips the *else*.
+- Link to the lecture: BEQ uses ALUSrc=0, ALUOp=Subtract, Branch=1, and the ALU's zero result picks the next PC.
 
 ## 3. Show the ALU live (about 1–2 min, optional)
 
@@ -56,4 +67,5 @@ python -m dualcore.demo -i
 - **Why PC + 1, not PC + 4?** Our PC indexes a list of 16-bit instructions; it is not a byte address.
 - **Do the cores really run in parallel?** No. Within one clock tick they are stepped one after the other. The snapshot/commit rule makes the result as if both acted in the same cycle.
 - **Same-address STORE conflict?** Commits happen core 0 then core 1, so core 1's value remains (tested).
+- **Why is the branch offset only -8 to +7?** The 16-bit word must also hold the opcode, a kind code and two registers; J covers long jumps.
 - **Why LOADI and NOT?** LOADI lets programs set constants and shows immediate operands. NOT adds one more bitwise ALU operation.

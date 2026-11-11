@@ -30,16 +30,19 @@ Single core simplified path:
 
 `X` = don't care (stored as `None` in `ControlSignals`).
 
-| Signal | R-type (8 ALU ops) | LOAD | STORE | HALT | LOADI (bonus) | NOT (bonus) | MIPS lecture value for lw / sw |
-|---|---|---|---|---|---|---|---|
-| RegDst | 1 | 1 | X | X | 1 | 1 | lw 0, sw X |
-| ALUSrc | 0 | X | X | X | X | X | lw 1, sw 1 |
-| MemtoReg | 0 | 1 | X | X | X | 0 | lw 1, sw X |
-| ImmToReg (added for LOADI) | 0 | 0 | 0 | 0 | 1 | 0 | not in MIPS table |
-| RegWrite | 1 | 1 | 0 | 0 | 1 | 1 | same |
-| MemRead | 0 | 1 | 0 | 0 | 0 | 0 | same |
-| MemWrite | 0 | 0 | 1 | 0 | 0 | 0 | same |
-| ALUOp | the opcode's operation | X | X | X | X | NOT | lw/sw Add |
+| Signal | R-type (8 ALU ops) | LOAD | STORE | HALT | LOADI (bonus) | NOT (bonus) | SLT (st. 07) | SLTI (st. 07) | BEQ (st. 07) | BNE (st. 07) | J (st. 07) | MIPS lecture value for lw / sw / beq |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| RegDst | 1 | 1 | X | X | 1 | 1 | 1 | 1 | X | X | X | lw 0, sw X, beq X |
+| ALUSrc | 0 | X | X | X | X | X | 0 | 1 | 0 | 0 | X | lw 1, sw 1, beq 0 |
+| MemtoReg | 0 | 1 | X | X | X | 0 | 0 | 0 | X | X | X | lw 1, sw X, beq X |
+| ImmToReg (added for LOADI) | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | not in MIPS table |
+| RegWrite | 1 | 1 | 0 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | same |
+| MemRead | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | same |
+| MemWrite | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | same |
+| Branch | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | beq 1 |
+| BranchNe (added for BNE) | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | not in MIPS table |
+| Jump (added for J) | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | not in this MIPS table |
+| ALUOp | the opcode's operation | X | X | X | X | NOT | SLT | SLT | SUB | SUB | X | lw/sw Add, beq Subtract |
 
 Why some values differ from MIPS (implementation choices forced by the ISA in `docs/ISA.md`, not by the PDF):
 
@@ -48,6 +51,7 @@ Why some values differ from MIPS (implementation choices forced by the ISA in `d
 - **ALUOp for R-type:** MIPS sends a 2-bit ALUOp plus the `funct` field to a separate ALU-control unit. Our 4-bit opcode directly names one of the eight operations, so ALUOp carries that name.
 - **Bonus LOADI / ImmToReg (stage 05):** the immediate is neither an ALU result nor a memory byte, so the writeback mux gets a third input selected by `ImmToReg=1` (it overrides MemtoReg). This mirrors the extra writeback path textbook MIPS extensions add for `lui`; the ALU stays idle.
 - **Bonus NOT (stage 05):** unary, so ALU input B is unused (ALUSrc = X); otherwise it behaves like an R-type ALU instruction.
-- **No Branch / PCSrc:** branches are excluded (`docs/COURSE_BOUNDARY.md`), so the next PC is always PC+1, or unchanged after HALT.
+- **Branch / PCSrc (stage 07 extension):** BEQ/BNE use exactly the lecture's beq column (ALUSrc=0, ALUOp=Subtract, Branch=1), and the ALU's zero result drives the PCSrc mux: taken when Zero=1 for BEQ, or Zero=0 for BNE (the extra `BranchNe` signal). Target = PC + 1 + offset, the index-based analogue of MIPS PC + 4 + (offset << 2). `Jump=1` selects the absolute J target. Otherwise next PC = PC + 1 (unchanged after HALT). Before stage 07 there were no branches and the next PC was always PC + 1.
+- **SLTI uses ALUSrc=1:** its 6-bit immediate becomes ALU input B, the same role ALUSrc=1 plays in MIPS. SLT/SLTI compare **unsigned** values (like MIPS `sltu`), matching this ISA's unsigned 8-bit data.
 
-**Scope:** diagrams describe logical blocks, not a timing-accurate electronic circuit. Every core owns its state; only data memory is shared. Claude must add a short explanation at stage 01, with signal examples, but must not add pipeline/cache/branch hardware.
+**Scope:** diagrams describe logical blocks, not a timing-accurate electronic circuit. Every core owns its state; only data memory is shared. Claude must add a short explanation at stage 01, with signal examples, but must not add pipeline/cache hardware. The only control-flow hardware is the stage-07 next-PC mux (branch target / jump target / PC + 1).

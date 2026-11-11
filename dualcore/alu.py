@@ -12,6 +12,7 @@ _OPERATIONS = {
     "SLL": lambda a, b: (a << b) & MASK,     # bits shifted past bit 7 are lost
     "SRL": lambda a, b: a >> b,              # logical: zeros shift in from the left
     "NOT": lambda a, b: ~a & MASK,           # bonus, unary: input b is ignored
+    "SLT": lambda a, b: 1 if a < b else 0,   # stage 07: unsigned compare
 }
 
 
