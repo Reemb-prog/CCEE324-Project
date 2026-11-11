@@ -1,18 +1,20 @@
 """Control unit: turns a decoded instruction into datapath control signals.
 
 The signal names follow the single-cycle MIPS control table from the lectures
-(RegDst, ALUSrc, MemtoReg, RegWrite, MemRead, MemWrite, ALUOp). A value of
-None means "X" (don't care): the datapath ignores that signal for the
-instruction. Values are adapted to this project's 16-bit ISA:
+(RegDst, ALUSrc, MemtoReg, RegWrite, MemRead, MemWrite, ALUOp), plus one
+extra signal, ImmToReg, for the bonus LOADI. A value of None means "X"
+(don't care): the datapath ignores that signal for the instruction. Values
+are adapted to this project's 16-bit ISA:
 
-    signal      R-type   LOAD   STORE   HALT
-    reg_dst       1       1      X       X
-    alu_src       0       X      X       X
-    mem_to_reg    0       1      X       X
-    reg_write     1       1      0       0
-    mem_read      0       1      0       0
-    mem_write     0       0      1       0
-    alu_op       name     X      X       X
+    signal      R-type   LOAD   STORE   HALT   LOADI   NOT
+    reg_dst       1       1      X       X      1       1
+    alu_src       0       X      X       X      X       X
+    mem_to_reg    0       1      X       X      X       0
+    imm_to_reg    0       0      0       0      1       0
+    reg_write     1       1      0       0      1       1
+    mem_read      0       1      0       0      0       0
+    mem_write     0       0      1       0      0       0
+    alu_op       name     X      X       X      X      NOT
 
 There is no Branch signal: this ISA has no branch instructions, so the next
 PC is always PC+1 (or unchanged after HALT).
@@ -35,6 +37,10 @@ class ControlSignals:
     alu_src: Optional[bool] = None
     # MemtoReg: 0 = write back the ALU result, 1 = write back the memory byte.
     mem_to_reg: Optional[bool] = None
+    # ImmToReg (bonus LOADI only): 1 = write back the 8-bit immediate from
+    # instruction bits [8:1]; it overrides MemtoReg. This is a third input on
+    # the writeback mux, like the extra path MIPS-style CPUs add for `lui`.
+    imm_to_reg: bool = False
     reg_write: bool = False   # write a result into register Rd
     mem_read: bool = False    # read shared data memory (LOAD)
     mem_write: bool = False   # write shared data memory (STORE)
@@ -56,4 +62,10 @@ class ControlUnit:
             return ControlSignals(mem_write=True)
         if name == "HALT":
             return ControlSignals()
+        if name == "LOADI":
+            return ControlSignals(reg_dst=True, imm_to_reg=True, reg_write=True)
+        if name == "NOT":
+            # Unary: ALU input B is unused, so ALUSrc is X.
+            return ControlSignals(reg_dst=True, mem_to_reg=False,
+                                  reg_write=True, alu_op="NOT")
         raise ValueError(f"no control signals defined for {name!r}")

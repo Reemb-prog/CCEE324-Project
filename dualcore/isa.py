@@ -3,6 +3,8 @@
 Field layout (bit 15 is the most significant bit):
     R form: [15:12]=opcode [11:9]=Rd  [8:6]=Rs [5:3]=Rt [2:0]=000
     M form: [15:12]=opcode [11:9]=Reg [8:1]=address    [0]=0
+    I form: [15:12]=opcode [11:9]=Rd  [8:1]=immediate  [0]=0       (bonus LOADI)
+    U form: [15:12]=opcode [11:9]=Rd  [8:6]=Rs [5:0]=000000        (bonus NOT)
     H form: [15:12]=1111   [11:0]=0
 """
 from dataclasses import dataclass
@@ -12,10 +14,9 @@ ALU_OPS = ("ADD", "SUB", "AND", "OR", "XOR", "NOR", "SLL", "SRL")
 
 OPCODES = {name: code for code, name in enumerate(ALU_OPS)}
 OPCODES.update({"LOAD": 0b1000, "STORE": 0b1001, "HALT": 0b1111})
+# The two bonus instructions (stage 05).
+OPCODES.update({"LOADI": 0b1010, "NOT": 0b1011})
 MNEMONICS = {code: name for name, code in OPCODES.items()}
-
-# Bonus opcodes are reserved here but not implemented until stage 05.
-RESERVED_BONUS = {0b1010: "LOADI", 0b1011: "NOT"}
 
 
 @dataclass
@@ -35,11 +36,13 @@ def _check_range(name: str, value: int, low: int, high: int) -> None:
 
 
 def encode_r(mnemonic: str, rd: int, rs: int, rt: int = 0) -> int:
-    """Encode one of the eight ALU operations: Rd = Rs op Rt."""
-    if mnemonic not in ALU_OPS:
+    """Encode an ALU operation: Rd = Rs op Rt, or bonus NOT: Rd = ~Rs (Rt must be 0)."""
+    if mnemonic not in ALU_OPS and mnemonic != "NOT":
         raise ValueError(f"not an R-form instruction: {mnemonic!r}")
     for name, reg in (("rd", rd), ("rs", rs), ("rt", rt)):
         _check_range(name, reg, 0, 7)
+    if mnemonic == "NOT" and rt != 0:
+        raise ValueError("NOT takes one source register; Rt must be 0")
     return (OPCODES[mnemonic] << 12) | (rd << 9) | (rs << 6) | (rt << 3)
 
 
@@ -53,8 +56,12 @@ def encode_mem(mnemonic: str, reg: int, address: int) -> int:
 
 
 def encode_imm(mnemonic: str, rd: int, value: int) -> int:
-    """LOADI is a bonus instruction, implemented only at stage 05."""
-    raise ValueError(f"immediate instruction {mnemonic!r} is not implemented yet (bonus, stage 05)")
+    """Encode bonus LOADI: Rd = 8-bit immediate value."""
+    if mnemonic != "LOADI":
+        raise ValueError(f"not an immediate instruction: {mnemonic!r}")
+    _check_range("rd", rd, 0, 7)
+    _check_range("immediate", value, 0, 255)
+    return (OPCODES[mnemonic] << 12) | (rd << 9) | (value << 1)
 
 
 def encode_halt() -> int:
@@ -65,8 +72,6 @@ def decode(word: int) -> DecodedInstruction:
     """Split a 16-bit machine word into its fields; reject malformed words."""
     _check_range("instruction word", word, 0, 0xFFFF)
     opcode = (word >> 12) & 0xF
-    if opcode in RESERVED_BONUS:
-        raise ValueError(f"opcode {opcode:04b} ({RESERVED_BONUS[opcode]}) is reserved, not implemented yet")
     if opcode not in MNEMONICS:
         raise ValueError(f"unknown opcode {opcode:04b}")
     mnemonic = MNEMONICS[opcode]
@@ -87,6 +92,20 @@ def decode(word: int) -> DecodedInstruction:
         if mnemonic == "LOAD":
             return DecodedInstruction(opcode, mnemonic, rd=reg, address=address)
         return DecodedInstruction(opcode, mnemonic, rs=reg, address=address)
+
+    if mnemonic == "LOADI":
+        if word & 0b1:
+            raise ValueError(f"I-form unused bit [0] must be zero: {word:#06x}")
+        return DecodedInstruction(opcode, mnemonic,
+                                  rd=(word >> 9) & 0b111,
+                                  immediate=(word >> 1) & 0xFF)
+
+    if mnemonic == "NOT":
+        if word & 0b111111:
+            raise ValueError(f"U-form unused bits [5:0] must be zero: {word:#06x}")
+        return DecodedInstruction(opcode, mnemonic,
+                                  rd=(word >> 9) & 0b111,
+                                  rs=(word >> 6) & 0b111)
 
     # HALT
     if word & 0x0FFF:

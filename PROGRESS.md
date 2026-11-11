@@ -7,8 +7,8 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 | 01 ISA/datapath | Approved |
 | 02 ALU/single core | Approved |
 | 03 two independent cores | Approved |
-| 04 shared memory | Done, awaiting human approval |
-| 05 bonus instructions | TODO |
+| 04 shared memory | Approved |
+| 05 bonus instructions | Done, awaiting human approval |
 | 06 report/demo | TODO |
 
 ## Checkpoints
@@ -47,3 +47,11 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 - **Decisions:** snapshot/commit order and "core 1 wins same-address conflicts" come from ISA.md's clock rule (a simulation choice, not a physical arbitration model). A standalone `Core.step(SharedMemory)` still reads/writes immediately (ISA.md). Demo registers are preset directly because LOADI is a stage-05 bonus.
 - **Tests:** `python scripts/harness.py verify` → integrity OK (13 protected files), stages 01–04: **15 run, 15 passed, 0 failed**. `python -m dualcore.demo` → 7/7 built-in checks PASS, exit code 0.
 - **Limitations:** no LOADI/NOT yet (stage 05); the demo is a first version that stage 06 may polish.
+
+### [STAGE 05] Bonus instructions LOADI and NOT
+
+- **Files changed:** `dualcore/isa.py` (I-form LOADI opcode 1010, U-form NOT opcode 1011; reserved-opcode rejection removed; unused-bit checks), `dualcore/alu.py` (`NOT`), `dualcore/control.py` (LOADI/NOT signals + new `imm_to_reg`), `dualcore/core.py` (writeback mux: immediate / memory / ALU; NOT ignores ALU input B), `dualcore/demo.py` (scripted demo now initializes registers with LOADI and uses NOT; display helpers for the two new formats), `docs/ARCHITECTURE.md` (control table extended).
+- **CO concept:** immediate operands (a constant encoded inside the instruction word) and a unary bitwise ALU operation; adding an instruction means adding a decoder case, a control-table column and, if needed, a datapath path.
+- **Decisions:** field layouts and opcodes from ISA.md; only these two bonuses (PDF / CLAUDE.md). `ImmToReg` as a third writeback-mux input is an implementation choice, since the immediate comes from neither the ALU nor memory (documented in ARCHITECTURE.md). The 11 required opcodes are unchanged.
+- **Tests:** `python scripts/harness.py verify` → integrity OK (13 protected files), stages 01–05: **17 run, 17 passed, 0 failed**. `python -m dualcore.demo` → 9/9 checks PASS, exit 0; expression mode `python -m dualcore.demo "200 + 100" "3 - 5"` exit 0.
+- **Limitations:** the expression mode still loads operands from memory rather than LOADI, and does not accept NOT expressions (kept as written by the team).

@@ -1,4 +1,4 @@
-"""ALU: the eight required 8-bit operations. All inputs and results are 0..255."""
+"""ALU: the eight required 8-bit operations plus bonus NOT. All inputs and results are 0..255."""
 
 MASK = 0xFF  # keep only the low 8 bits, like an 8-bit hardware result bus
 
@@ -11,6 +11,7 @@ _OPERATIONS = {
     "NOR": lambda a, b: ~(a | b) & MASK,
     "SLL": lambda a, b: (a << b) & MASK,     # bits shifted past bit 7 are lost
     "SRL": lambda a, b: a >> b,              # logical: zeros shift in from the left
+    "NOT": lambda a, b: ~a & MASK,           # bonus, unary: input b is ignored
 }
 
 

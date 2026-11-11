@@ -1,12 +1,22 @@
 """Terminal demo: two cores with private registers communicating through shared memory.
 
-Run with:  python -m dualcore.demo
+Run with:
+    python -m dualcore.demo                  scripted demo (core 0 STORE -> core 1 LOAD)
+    python -m dualcore.demo "3 + 4"          compile and trace one expression on core 0
+    python -m dualcore.demo "3 + 4" "9 - 2"  one expression per core, run side by side
+    python -m dualcore.demo -i               type expressions at a prompt
 """
-from .isa import decode, encode_halt, encode_mem, encode_r
+import re
+import sys
+from typing import Optional
+
+from .control import ControlUnit
+from .isa import decode, encode_halt, encode_imm, encode_mem, encode_r
 from .processor import DualCoreProcessor
 
 MAILBOX = 100   # core 0 writes here, core 1 reads it
 RESULT = 101    # core 1 writes its answer here
+INVERTED = 102  # core 1 writes NOT of its answer here
 
 
 def describe(word: int) -> str:
@@ -18,32 +28,36 @@ def describe(word: int) -> str:
         return f"LOAD  R{d.rd}, [{d.address}]"
     if d.mnemonic == "STORE":
         return f"STORE R{d.rs}, [{d.address}]"
+    if d.mnemonic == "LOADI":
+        return f"LOADI R{d.rd}, {d.immediate}"
+    if d.mnemonic == "NOT":
+        return f"NOT   R{d.rd}, R{d.rs}"
     return f"{d.mnemonic:<5} R{d.rd}, R{d.rs}, R{d.rt}"
 
 
 def build_processor() -> DualCoreProcessor:
     # Core 0 (producer): compute 25 + 17 and publish it to memory.
     program0 = [
+        encode_imm("LOADI", 1, 25),        # R1 = 25   (bonus LOADI: no Python fixture needed)
+        encode_imm("LOADI", 2, 17),        # R2 = 17
         encode_r("ADD", 3, 1, 2),          # R3 = R1 + R2 = 42
-        encode_mem("STORE", 3, MAILBOX),   # mem[100] = R3 (committed at end of tick 2)
+        encode_mem("STORE", 3, MAILBOX),   # mem[100] = R3 (committed at end of tick 4)
         encode_halt(),
     ]
     # Core 1 (consumer): does its own work, then reads core 0's value.
     program1 = [
-        encode_r("SUB", 3, 1, 2),          # R3 = R1 - R2 = 2 (its own R3, not core 0's)
-        encode_mem("LOAD", 4, MAILBOX),    # tick 2: same tick as the STORE -> still sees 0
-        encode_mem("LOAD", 5, MAILBOX),    # tick 3: the store is now visible -> 42
+        encode_imm("LOADI", 1, 5),         # R1 = 5    (its own R1, not core 0's)
+        encode_imm("LOADI", 2, 3),         # R2 = 3
+        encode_r("SUB", 3, 1, 2),          # R3 = R1 - R2 = 2
+        encode_mem("LOAD", 4, MAILBOX),    # tick 4: same tick as the STORE -> still sees 0
+        encode_mem("LOAD", 5, MAILBOX),    # tick 5: the store is now visible -> 42
         encode_r("ADD", 6, 5, 1),          # R6 = 42 + 5 = 47
         encode_mem("STORE", 6, RESULT),    # mem[101] = 47
+        encode_r("NOT", 7, 6),             # R7 = ~47 = 208   (bonus NOT)
+        encode_mem("STORE", 7, INVERTED),  # mem[102] = 208
         encode_halt(),
     ]
-    cpu = DualCoreProcessor(program0, program1)
-    # Starting register values are set directly (LOADI is only added at stage 05).
-    cpu.cores[0].registers.write(1, 25)
-    cpu.cores[0].registers.write(2, 17)
-    cpu.cores[1].registers.write(1, 5)
-    cpu.cores[1].registers.write(2, 3)
-    return cpu
+    return DualCoreProcessor(program0, program1)
 
 
 def show_event(core_id: int, core, event: dict) -> str:
@@ -57,7 +71,11 @@ def show_event(core_id: int, core, event: dict) -> str:
     return text
 
 
-def main() -> int:
+def show_memory(cpu) -> str:
+    return ", ".join(f"mem[{a}]={cpu.memory.read(a)}" for a in (MAILBOX, RESULT, INVERTED))
+
+
+def run_scripted_demo() -> int:
     cpu = build_processor()
     print("Dual-core 8-bit CPU demo")
     for core_id, core in enumerate(cpu.cores):
@@ -71,15 +89,13 @@ def main() -> int:
         print(f"tick {cpu.cycles}:")
         for core_id, (core, event) in enumerate(zip(cpu.cores, events)):
             print("   " + show_event(core_id, core, event))
-        print(f"   end of tick: mem[{MAILBOX}]={cpu.memory.read(MAILBOX)}, "
-              f"mem[{RESULT}]={cpu.memory.read(RESULT)}")
+        print(f"   end of tick: {show_memory(cpu)}")
 
     print("\nFinal state:")
     for core_id, core in enumerate(cpu.cores):
         regs = " ".join(f"R{i}={v}" for i, v in enumerate(core.registers.snapshot()))
         print(f"  core{core_id}: PC={core.pc} halted={core.halted}  {regs}")
-    print(f"  shared memory: mem[{MAILBOX}]={cpu.memory.read(MAILBOX)}, "
-          f"mem[{RESULT}]={cpu.memory.read(RESULT)}")
+    print(f"  shared memory: {show_memory(cpu)}")
 
     c0, c1 = cpu.cores
     checks = [
@@ -87,14 +103,222 @@ def main() -> int:
         ("core 1 LOAD in the same tick as the STORE saw the old value 0", c1.registers.read(4) == 0),
         ("core 1 LOAD one tick later saw core 0's value 42", c1.registers.read(5) == 42),
         ("core 1 wrote 42 + 5 = 47 back to memory", cpu.memory.read(RESULT) == 47),
+        ("core 1 wrote NOT 47 = 208 (00101111 -> 11010000)", cpu.memory.read(INVERTED) == 208),
+        ("LOADI set R1/R2 from the programs themselves", (c0.registers.read(1), c1.registers.read(1)) == (25, 5)),
         ("R3 differs per core (private register files)", (c0.registers.read(3), c1.registers.read(3)) == (42, 2)),
-        ("core 0 halted early at PC 2 while core 1 ran on", c0.pc == 2 and c1.pc == 5),
-        ("both cores halted after 6 ticks", cpu.cycles == 6),
+        ("core 0 halted early at PC 4 while core 1 ran on", c0.pc == 4 and c1.pc == 9),
+        ("both cores halted after 10 ticks", cpu.cycles == 10),
     ]
     print("\nVerification:")
     for text, ok in checks:
         print(f"  [{'PASS' if ok else 'FAIL'}] {text}")
     return 0 if all(ok for _, ok in checks) else 1
+
+
+# ---------------------------------------------------------------------------
+# Expression mode: "3 + 4" -> machine code -> traced execution
+# ---------------------------------------------------------------------------
+
+OPERATORS = {"+": "ADD", "-": "SUB", "&": "AND", "|": "OR", "^": "XOR",
+             "nor": "NOR", "<<": "SLL", ">>": "SRL"}
+_EXPRESSION = re.compile(r"^\(?\s*(\w+)\s*(<<|>>|nor|[-+&|^])\s*(\w+)\s*\)?$", re.IGNORECASE)
+
+# Each core gets its own 3-byte area of shared memory: operand a, operand b, result.
+DATA_BASE = (0, 16)
+
+
+def parse_expression(text: str) -> tuple[int, str, int]:
+    """'3 + 4' -> (3, 'ADD', 4). Operands are 8-bit: 0..255 (decimal, 0x.., or 0b..)."""
+    match = _EXPRESSION.match(text.strip())
+    if not match:
+        raise ValueError(f"expected 'a op b' with op one of {' '.join(OPERATORS)}, got {text!r}")
+    left, op, right = match.groups()
+    values = []
+    for token in (left, right):
+        try:
+            value = int(token, 0)
+        except ValueError:
+            raise ValueError(f"{token!r} is not a number") from None
+        if not 0 <= value <= 255:
+            raise ValueError(f"{token} does not fit in 8 bits (0..255)")
+        values.append(value)
+    return values[0], OPERATORS[op.lower()], values[1]
+
+
+def compile_expression(mnemonic: str, base: int) -> list[int]:
+    """Machine code for: mem[base+2] = mem[base] <op> mem[base+1]."""
+    return [
+        encode_mem("LOAD", 1, base),        # R1 = first operand
+        encode_mem("LOAD", 2, base + 1),    # R2 = second operand
+        encode_r(mnemonic, 3, 1, 2),        # R3 = R1 op R2
+        encode_mem("STORE", 3, base + 2),   # result back to shared memory
+        encode_halt(),
+    ]
+
+
+def fields(word: int) -> str:
+    """Show a machine word split into its instruction-format fields."""
+    d = decode(word)
+    op = f"{d.opcode:04b}"
+    if d.mnemonic == "HALT":
+        return f"{op} 000000000000          (opcode | unused)"
+    if d.mnemonic in ("LOAD", "STORE"):
+        reg = d.rd if d.mnemonic == "LOAD" else d.rs
+        return f"{op} {reg:03b} {d.address:08b} 0      (opcode | reg | address | 0)"
+    if d.mnemonic == "LOADI":
+        return f"{op} {d.rd:03b} {d.immediate:08b} 0      (opcode | rd | immediate | 0)"
+    if d.mnemonic == "NOT":
+        return f"{op} {d.rd:03b} {d.rs:03b} 000000      (opcode | rd | rs | unused)"
+    return f"{op} {d.rd:03b} {d.rs:03b} {d.rt:03b} 000     (opcode | rd | rs | rt | unused)"
+
+
+def _bit(value: Optional[bool]) -> str:
+    return "X" if value is None else str(int(value))
+
+
+def show_control(word: int) -> str:
+    s = ControlUnit().signals(decode(word))
+    return (f"RegDst={_bit(s.reg_dst)} ALUSrc={_bit(s.alu_src)} MemtoReg={_bit(s.mem_to_reg)} "
+            f"ImmToReg={_bit(s.imm_to_reg)} RegWrite={_bit(s.reg_write)} MemRead={_bit(s.mem_read)} "
+            f"MemWrite={_bit(s.mem_write)} ALUOp={s.alu_op or 'X'}")
+
+
+def explain_step(event: dict, regs_before: tuple[int, ...], core) -> list[str]:
+    """Plain-English lines for what one core did in one tick."""
+    if event["mnemonic"] is None:
+        return [f"(halted, PC stays {core.pc})"]
+    word = event["word"]
+    d = decode(word)
+    lines = [f"fetch    PC={event['pc']} -> {word:#06x}  {describe(word)}",
+             f"control  {show_control(word)}"]
+    if d.mnemonic == "HALT":
+        lines.append(f"halt     core stops; PC frozen at {core.pc}")
+        return lines
+    if d.mnemonic == "LOAD":
+        lines.append(f"memory   read mem[{d.address}] = {event['result']} (MemRead=1)")
+        lines.append(f"write    R{d.rd} <- {event['result']}  (MemtoReg=1: memory data, not ALU)")
+    elif d.mnemonic == "STORE":
+        lines.append(f"read     R{d.rs} = {event['stored']}")
+        lines.append(f"memory   buffer mem[{d.address}] <- {event['stored']} "
+                     f"(MemWrite=1, committed at end of tick)")
+    elif d.mnemonic == "LOADI":
+        lines.append(f"write    R{d.rd} <- {d.immediate}  (ImmToReg=1: immediate from the instruction)")
+    elif d.mnemonic == "NOT":
+        a = regs_before[d.rs]
+        lines.append(f"read     R{d.rs} = {a} ({a:08b})")
+        lines.append(f"ALU      NOT -> {event['result']} ({event['result']:08b})")
+        lines.append(f"write    R{d.rd} <- {event['result']}  (MemtoReg=0: ALU result)")
+    else:
+        a, b = regs_before[d.rs], regs_before[d.rt]
+        lines.append(f"read     R{d.rs} = {a} ({a:08b}), R{d.rt} = {b} ({b:08b})")
+        lines.append(f"ALU      {d.mnemonic} -> {event['result']} ({event['result']:08b})")
+        lines.append(f"write    R{d.rd} <- {event['result']}  (MemtoReg=0: ALU result)")
+    lines.append(f"next PC  {event['pc']} + 1 = {core.pc}")
+    return lines
+
+
+def explain_wrap(a: int, mnemonic: str, b: int, result: int) -> str:
+    """Say why the 8-bit answer differs from ordinary arithmetic, if it does."""
+    exact = {"ADD": a + b, "SUB": a - b, "SLL": a << b}.get(mnemonic)
+    if exact is None or exact == result:
+        return ""
+    if mnemonic == "SUB":
+        return (f"  note: {a} - {b} = {exact} is negative; the 8-bit pattern {result:08b} is "
+                f"{exact} in two's complement, read as unsigned it is {result}.")
+    if mnemonic == "ADD":
+        return f"  note: {exact} does not fit in 8 bits; the carry out of bit 7 is dropped ({exact} - 256 = {result})."
+    return f"  note: bits shifted past bit 7 are lost ({exact} masked to 8 bits = {result})."
+
+
+def run_expressions(expr0: str, expr1: Optional[str] = None) -> int:
+    parsed = [parse_expression(expr0)] + ([parse_expression(expr1)] if expr1 else [])
+    programs = [compile_expression(m, DATA_BASE[i]) for i, (_, m, _) in enumerate(parsed)]
+    if len(programs) == 1:
+        programs.append([encode_halt()])   # core 1 has no work: it halts on tick 1
+    cpu = DualCoreProcessor(programs[0], programs[1])
+
+    print("1) Parse")
+    for i, (text, (a, m, b)) in enumerate(zip((expr0, expr1), parsed)):
+        print(f"   core{i}: {text.strip()!r} -> ALU operation {m} with operands {a} and {b}")
+
+    print("\n2) Put the operands in shared data memory (like a MIPS .data section;")
+    print("   bonus LOADI could load them directly, but this mode shows LOAD/STORE)")
+    for i, (a, _, b) in enumerate(parsed):
+        base = DATA_BASE[i]
+        cpu.memory.write(base, a)
+        cpu.memory.write(base + 1, b)
+        print(f"   mem[{base}] = {a} ({a:08b})   mem[{base + 1}] = {b} ({b:08b})")
+
+    print("\n3) Assemble into 16-bit machine code")
+    for i, core in enumerate(cpu.cores):
+        print(f"   core{i} program:")
+        for index, word in enumerate(core.program):
+            print(f"     {index}: {describe(word):<17} {word:#06x} = {fields(word)}")
+
+    print("\n4) Execute (each tick: one instruction per active core)")
+    while not all(core.halted for core in cpu.cores):
+        regs_before = [core.registers.snapshot() for core in cpu.cores]
+        events = cpu.tick()
+        print(f"   --- tick {cpu.cycles} ---")
+        for i, (core, event) in enumerate(zip(cpu.cores, events)):
+            for n, line in enumerate(explain_step(event, regs_before[i], core)):
+                print(f"   {'core' + str(i) if n == 0 else '':<6} {line}")
+
+    print("\n5) Result")
+    ok = True
+    for i, (a, m, b) in enumerate(parsed):
+        base = DATA_BASE[i]
+        result = cpu.memory.read(base + 2)
+        expected = {"ADD": (a + b) & 0xFF, "SUB": (a - b) & 0xFF, "AND": a & b, "OR": a | b,
+                    "XOR": a ^ b, "NOR": ~(a | b) & 0xFF, "SLL": (a << b) & 0xFF,
+                    "SRL": a >> b}[m]
+        ok = ok and result == expected
+        print(f"   core{i}: mem[{base + 2}] = {result} ({result:08b})   "
+              f"[{'PASS' if result == expected else 'FAIL'}] expected {expected}")
+        wrap = explain_wrap(a, m, b, result)
+        if wrap:
+            print("   " + wrap)
+    print(f"   {cpu.cycles} ticks.", end="")
+    if len(parsed) == 2:
+        r3 = [core.registers.read(3) for core in cpu.cores]
+        print(f" Both cores used the names R1-R3, but each had its own copy "
+              f"(core0 R3={r3[0]}, core1 R3={r3[1]}).", end="")
+    print()
+    return 0 if ok else 1
+
+
+def interactive() -> int:
+    print("Type an expression like 3 + 4  (ops: + - & | ^ nor << >>, operands 0..255).")
+    print("Blank line or 'q' quits.")
+    while True:
+        try:
+            expr0 = input("\ncore 0 expression> ").strip()
+            if not expr0 or expr0.lower() in ("q", "quit", "exit"):
+                return 0
+            expr1 = input("core 1 expression (Enter = idle)> ").strip()
+        except EOFError:
+            return 0
+        print()
+        try:
+            run_expressions(expr0, expr1 or None)
+        except ValueError as error:
+            print(f"error: {error}")
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    if not args:
+        return run_scripted_demo()
+    if args[0] in ("-i", "--interactive"):
+        return interactive()
+    if len(args) > 2:
+        print('usage: python -m dualcore.demo ["expr for core 0" ["expr for core 1"]] | -i')
+        return 2
+    try:
+        return run_expressions(*args)
+    except ValueError as error:
+        print(f"error: {error}")
+        return 2
 
 
 if __name__ == "__main__":

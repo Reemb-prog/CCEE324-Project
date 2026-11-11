@@ -37,12 +37,13 @@ class Core:
 
         event = {"pc": pc, "word": word, "mnemonic": decoded.mnemonic, "halted": False}
 
-        # Register read + execute: ALUSrc=0, so ALU input B is register Rt.
-        # LOAD/STORE leave alu_op unset: their absolute address needs no ALU.
+        # Register read + execute: ALUSrc=0, so ALU input B is register Rt
+        # (unary NOT has ALUSrc=X and ignores B). LOAD/STORE/LOADI leave
+        # alu_op unset: they need no ALU.
         alu_result = None
         if signals.alu_op is not None:
             a = self.registers.read(decoded.rs)
-            b = self.registers.read(decoded.rt)
+            b = self.registers.read(decoded.rt) if signals.alu_src is False else 0
             alu_result = alu_execute(signals.alu_op, a, b)
 
         # Memory access: the address comes straight from instruction bits [8:1]
@@ -55,9 +56,13 @@ class Core:
             memory.write(decoded.address, stored)
             event.update(address=decoded.address, stored=stored)
 
-        # Writeback: MemtoReg picks memory data (1) or ALU result (0); RegDst=1 selects Rd
+        # Writeback mux: ImmToReg picks the immediate (LOADI); otherwise MemtoReg
+        # picks memory data (1) or the ALU result (0). RegDst=1 selects Rd.
         if signals.reg_write:
-            write_data = mem_data if signals.mem_to_reg else alu_result
+            if signals.imm_to_reg:
+                write_data = decoded.immediate
+            else:
+                write_data = mem_data if signals.mem_to_reg else alu_result
             self.registers.write(decoded.rd, write_data)
             event.update(rd=decoded.rd, result=write_data)
 
