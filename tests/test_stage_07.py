@@ -175,6 +175,24 @@ class TestControlFlow(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             cpu.run(max_cycles=10)
 
+    def test_r0_hard_wired_zero(self):
+        """Instruction writes to R0 are discarded; R0 always reads 0 in programs."""
+        from dualcore.isa import encode_imm, encode_r, encode_mem, encode_branch, encode_halt
+        from dualcore.processor import DualCoreProcessor
+        cpu = DualCoreProcessor([encode_imm("LOADI", 0, 77),     # discarded
+                                 encode_imm("LOADI", 1, 5),
+                                 encode_r("ADD", 0, 1, 1),       # discarded
+                                 encode_mem("LOAD", 0, 9),       # discarded (mem[9] = 99)
+                                 encode_r("ADD", 2, 0, 1),       # R2 = 0 + 5
+                                 encode_branch("BEQ", 0, 0, 1),  # R0 == R0: always taken
+                                 encode_imm("LOADI", 3, 1),      # skipped
+                                 encode_halt()],
+                                [encode_halt()])
+        cpu.memory.write(9, 99)
+        cpu.run(max_cycles=20)
+        r = cpu.cores[0].registers
+        self.assertEqual((r.read(0), r.read(2), r.read(3)), (0, 5, 0))
+
     def test_cross_core_spin_wait(self):
         """Core 1 polls shared memory until core 0's STORE becomes visible."""
         from dualcore.isa import encode_imm, encode_mem, encode_branch, encode_halt

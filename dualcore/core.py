@@ -62,11 +62,13 @@ class Core:
             event.update(address=decoded.address, stored=stored)
 
         # Writeback mux: MemtoReg picks memory data (1) or the ALU result (0).
-        # RegDst=1 selects Rd.
+        # RegDst=1 selects Rd. R0 is hard-wired to zero (like MIPS $zero):
+        # an instruction's write to R0 is discarded.
         if signals.reg_write:
             write_data = mem_data if signals.mem_to_reg else alu_result
-            self.registers.write(decoded.rd, write_data)
-            event.update(rd=decoded.rd, result=write_data)
+            if decoded.rd != 0:
+                self.registers.write(decoded.rd, write_data)
+            event.update(rd=decoded.rd, result=self.registers.read(decoded.rd))
 
         # Next PC (PCSrc mux): jump target, taken-branch target, or PC + 1.
         # A branch is taken when the ALU's Rs - Rt result is zero (BEQ) or

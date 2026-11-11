@@ -63,4 +63,4 @@ Rules:
 - Comparisons are **unsigned**, consistent with the rest of this ISA (like MIPS `sltu`): `200 < 5` is false.
 - BEQ/BNE compare by computing `Rs − Rt` in the ALU and testing for a zero result. They write no register and touch no memory.
 - A branch or jump to an index outside the program is not an error by itself. The next fetch raises `RuntimeError`, exactly like running off the end without HALT. Infinite loops are stopped by `run(max_cycles)`.
-- R0 is still an ordinary writable register (there is no hard-wired zero), so programs that compare against zero must load 0 into a register first.
+- **R0 is hard-wired to zero for instructions** (like MIPS `$zero`; a later stage-07 revision): an instruction's write to R0 is discarded, so R0 always reads 0 in programs and `BEQ Rx, R0, …` tests for zero directly. This revises the earlier rule "Every register is writable including R0" for program execution only: `RegisterFile.write(0, v)` still works as a direct test-setup path, which keeps the stage-01 register-file test valid.

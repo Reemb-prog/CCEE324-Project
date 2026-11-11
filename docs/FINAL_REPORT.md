@@ -51,7 +51,7 @@ There is no flag register. The stage-07 branches use the ALU's zero result direc
 
 ## 5. Register-file design (deliverable 5)
 
-Each `RegisterFile` object owns a private list of eight 8-bit values, all starting at 0 and all writable, including R0 (unlike MIPS `$zero`). Bad indices or out-of-range values raise `ValueError`. Every core builds its own object, so both cores can use "R1" while they are **different physical registers** (PDF example).
+Each `RegisterFile` object owns a private list of eight 8-bit values, all starting at 0. In the original design every register was writable, including R0. The stage-07 revision hard-wires R0 to zero for programs, like MIPS `$zero`: the core discards instruction writes to R0. Bad indices or out-of-range values raise `ValueError`. Every core builds its own object, so both cores can use "R1" while they are **different physical registers** (PDF example).
 
 ## 6. Control-unit design (deliverable 6)
 
@@ -105,7 +105,7 @@ So a value stored in tick *n* becomes visible from tick *n + 1*, and if both cor
 
 The brief allows extra instructions. The original bonus added exactly two:
 
-- **LOADI Rd, imm8** lets a program create its own constants. Without it, register values must come from Python test setup or from memory. It also introduces the immediate-operand idea. LOADI stays on the lecture datapath: immediate → ALUSrc = 1 → ALU → MemtoReg = 0 → register, like MIPS `ori $t0, $zero, imm`. The ALU uses an internal **PASS** function (result = input B; not an instruction), since LOADI has no Rs field and R0 is not hard-wired to zero (design choice).
+- **LOADI Rd, imm8** lets a program create its own constants. Without it, register values must come from Python test setup or from memory. It also introduces the immediate-operand idea. LOADI stays on the lecture datapath: immediate → ALUSrc = 1 → ALU → MemtoReg = 0 → register, like MIPS `ori $t0, $zero, imm`. The ALU uses an internal **PASS** function (result = input B; not an instruction), since LOADI has no Rs field (design choice).
 - **NOT Rd, Rs** adds one more bitwise ALU function at minimal cost. It is unary, so ALU input B is don't-care: `NOT 47 = 208` (`00101111 → 11010000`).
 
 The 11 basic opcodes are unchanged.
@@ -123,7 +123,7 @@ After the six original stages, the team asked for control flow so programs can e
 
 A taken branch goes to PC + 1 + offset, where offset is a 4-bit signed number (-8 to +7). This is the index version of the lecture's PC + 4 + (offset << 2). BEQ/BNE follow the lecture's beq control column: ALUSrc = 0, ALUOp = Subtract, Branch = 1, and the ALU's zero result feeds the PCSrc mux. Two signals are new: **BranchNe** inverts the zero test for BNE, and **Jump** selects the J target. SLTI shares LOADI's immediate path (ALUSrc = 1), using imm6 instead of imm8.
 
-Comparisons are unsigned, consistent with the rest of the ISA. R0 is not hard-wired to zero, so programs load 0 into a register before comparing against it.
+Comparisons are unsigned, consistent with the rest of the ISA. R0 is hard-wired to zero (instruction writes to it are discarded), so `BEQ Rx, R0, ...` tests for zero directly.
 
 The new `python -m dualcore.demo -b` runs three patterns:
 
@@ -135,7 +135,7 @@ The short offset range means a loop body can be at most about 8 instructions awa
 
 ## 11. Simulation results and test evidence (deliverable 10)
 
-The automated **test** suite has 32 unit tests across seven stages (19 for the original six, 13 for the stage-07 extension) and runs via `python scripts/harness.py verify`. Before running, the harness also checks the hashes of 14 protected test and spec files. The observed results and full demo output are copied in `docs/RESULTS.md`. The tests cover:
+The automated **test** suite has 33 unit tests across seven stages (19 for the original six, 14 for the stage-07 extension) and runs via `python scripts/harness.py verify`. Before running, the harness also checks the hashes of 14 protected test and spec files. The observed results and full demo output are copied in `docs/RESULTS.md`. The tests cover:
 
 - encoding, decoding and rejection of invalid words;
 - register isolation;
@@ -144,7 +144,7 @@ The automated **test** suite has 32 unit tests across seven stages (19 for the o
 - independent cores and the cycle count;
 - memory bounds, next-tick visibility and the same-address conflict;
 - both bonus instructions;
-- stage-07 encoding and control signals, `if`, `while`, backward loops, out-of-program targets, and a cross-core spin-wait with an exact tick count;
+- stage-07 encoding and control signals, `if`, `while`, backward loops, out-of-program targets, the hard-wired R0, and a cross-core spin-wait with an exact tick count;
 - the presence of these deliverables.
 
 The scripted demo (`python -m dualcore.demo`) prints 9 PASS checks. Core 0 computes 25 + 17 = 42 and STOREs it in tick 4. Core 1's LOAD in tick 4 still reads 0, its LOAD in tick 5 reads 42, and it then writes 47 and NOT 47 = 208 to memory.

@@ -339,7 +339,7 @@ VERDICT = 62     # core 1's if/else answer
 def build_branch_processor() -> DualCoreProcessor:
     # Core 0: sum = 1 + 2 + 3 + 4 + 5 with a while loop, then publish it.
     program0 = [
-        encode_imm("LOADI", 0, 0),            #  0: R0 = 0 (no hard-wired zero register)
+        encode_imm("LOADI", 0, 0),            #  0: no effect: R0 is hard-wired to 0
         encode_imm("LOADI", 1, 1),            #  1: i = 1
         encode_imm("LOADI", 2, 6),            #  2: limit = 6
         encode_imm("LOADI", 3, 0),            #  3: sum = 0
@@ -355,7 +355,7 @@ def build_branch_processor() -> DualCoreProcessor:
     ]
     # Core 1: wait for the flag, then: if sum < 20 then verdict = 1 else verdict = 0.
     program1 = [
-        encode_imm("LOADI", 0, 0),            #  0: R0 = 0
+        encode_imm("LOADI", 0, 0),            #  0: no effect: R0 is hard-wired to 0
         encode_mem("LOAD", 1, FLAG_ADDR),     #  1: wait: R1 = flag
         encode_branch("BEQ", 1, 0, -2),       #  2: while flag == 0 -> 1
         encode_mem("LOAD", 2, SUM_ADDR),      #  3: R2 = sum

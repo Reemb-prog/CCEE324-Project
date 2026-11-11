@@ -18,7 +18,8 @@ class RegisterFile:
         return self._values[index]
 
     def write(self, index: int, value: int) -> None:
-        """Write an unsigned 8-bit value. Every register, including R0, is writable."""
+        """Write an unsigned 8-bit value. Any register can be set here (test setup);
+        the core discards instruction writes to R0, which is hard-wired to zero."""
         self._check_index(index)
         if type(value) is not int or not 0 <= value <= 0xFF:
             raise ValueError(f"register value must be 0..255, got {value!r}")

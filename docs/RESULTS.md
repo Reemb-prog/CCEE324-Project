@@ -38,6 +38,8 @@ test_cross_core_spin_wait (tests.test_stage_07.TestControlFlow.test_cross_core_s
 Core 1 polls shared memory until core 0's STORE becomes visible. ... ok
 test_if_skips_when_equal (tests.test_stage_07.TestControlFlow.test_if_skips_when_equal) ... ok
 test_out_of_program_target_and_infinite_loop (tests.test_stage_07.TestControlFlow.test_out_of_program_target_and_infinite_loop) ... ok
+test_r0_hard_wired_zero (tests.test_stage_07.TestControlFlow.test_r0_hard_wired_zero)
+Instruction writes to R0 are discarded; R0 always reads 0 in programs. ... ok
 test_slti_if_else (tests.test_stage_07.TestControlFlow.test_slti_if_else) ... ok
 test_while_loop_sum (tests.test_stage_07.TestControlFlow.test_while_loop_sum)
 sum = 0; i = 1; while (i < 6) { sum += i; i++ }  ->  sum = 15. ... ok
@@ -47,12 +49,12 @@ test_exact_bit_patterns (tests.test_stage_07.TestEncoding.test_exact_bit_pattern
 test_invalid_words_and_operands (tests.test_stage_07.TestEncoding.test_invalid_words_and_operands) ... ok
 
 ----------------------------------------------------------------------
-Ran 32 tests in 0.036s
+Ran 33 tests in 0.048s
 
 OK
 ```
 
-**Summary: 32 run, 32 passed, 0 failed** (19 from the original six stages, 13 from the stage-07 extension).
+**Summary: 33 run, 33 passed, 0 failed** (19 from the original six stages, 14 from the stage-07 extension).
 
 Per-stage coverage:
 
@@ -64,7 +66,7 @@ Per-stage coverage:
 | 04 | 3 | 256-byte bounds, STORE visible to the other core only on the next tick, same-address conflict (core 1 wins) |
 | 05 | 2 | LOADI/NOT encoding, immediate 255, NOT masking, a program using both, invalid bonus operands |
 | 06 | 2 | Deliverable files exist and the report covers required concepts |
-| 07 | 13 | Extension: SLT/SLTI/BEQ/BNE/J bit patterns and invalid words, unsigned SLT, control signals, if, while (sum 1..5), backward BNE loop, out-of-program target, infinite-loop budget, cross-core spin-wait (exactly 6 ticks) |
+| 07 | 14 | Extension: SLT/SLTI/BEQ/BNE/J bit patterns and invalid words, unsigned SLT, control signals, if, while (sum 1..5), backward BNE loop, out-of-program target, infinite-loop budget, hard-wired R0, cross-core spin-wait (exactly 6 ticks) |
 
 ## 2. Scripted dual-core demo
 

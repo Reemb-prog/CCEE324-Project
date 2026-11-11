@@ -10,7 +10,7 @@ python scripts/harness.py verify
 
 Point out:
 - **"Integrity OK: 14 protected files":** the tests were not edited.
-- **"Ran 32 tests (19 original + 13 stage-07 extension) … OK":** all stages pass.
+- **"Ran 33 tests (19 original + 14 stage-07 extension) … OK":** all stages pass.
 - The test names map to the milestones: datapath (01), ALU and single core (02), two cores (03), shared memory (04), bonus (05), deliverables (06), branching extension (07).
 
 ## 2. Run the dual-core program (about 2 min)
