@@ -38,8 +38,8 @@ class Core:
         event = {"pc": pc, "word": word, "mnemonic": decoded.mnemonic, "halted": False}
 
         # Register read + execute. ALUSrc picks ALU input B: 0 = register Rt,
-        # 1 = the immediate (SLTI); unary NOT has ALUSrc=X and ignores B.
-        # LOAD/STORE/LOADI/J leave alu_op unset: they need no ALU.
+        # 1 = the immediate (LOADI imm8, SLTI imm6); unary NOT has ALUSrc=X and
+        # ignores B. LOADI's PASS ignores input A. LOAD/STORE/J need no ALU.
         alu_result = None
         if signals.alu_op is not None:
             a = self.registers.read(decoded.rs)
@@ -61,13 +61,10 @@ class Core:
             memory.write(decoded.address, stored)
             event.update(address=decoded.address, stored=stored)
 
-        # Writeback mux: ImmToReg picks the immediate (LOADI); otherwise MemtoReg
-        # picks memory data (1) or the ALU result (0). RegDst=1 selects Rd.
+        # Writeback mux: MemtoReg picks memory data (1) or the ALU result (0).
+        # RegDst=1 selects Rd.
         if signals.reg_write:
-            if signals.imm_to_reg:
-                write_data = decoded.immediate
-            else:
-                write_data = mem_data if signals.mem_to_reg else alu_result
+            write_data = mem_data if signals.mem_to_reg else alu_result
             self.registers.write(decoded.rd, write_data)
             event.update(rd=decoded.rd, result=write_data)
 

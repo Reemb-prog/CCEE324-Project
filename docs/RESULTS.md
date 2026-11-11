@@ -160,13 +160,13 @@ Command: `python -m dualcore.demo "200 + 100" "3 - 5"` (exit code 0). Excerpt (t
 ```text
    --- tick 3 ---
    core0  fetch    PC=2 -> 0x0650  ADD   R3, R1, R2
-          control  RegDst=1 ALUSrc=0 MemtoReg=0 ImmToReg=0 RegWrite=1 MemRead=0 MemWrite=0 ALUOp=ADD
+          control  RegDst=1 ALUSrc=0 MemtoReg=0 RegWrite=1 MemRead=0 MemWrite=0 Branch=0 BranchNe=0 Jump=0 ALUOp=ADD
           read     R1 = 200 (11001000), R2 = 100 (01100100)
           ALU      ADD -> 44 (00101100)
           write    R3 <- 44  (MemtoReg=0: ALU result)
           next PC  2 + 1 = 3
    core1  fetch    PC=2 -> 0x1650  SUB   R3, R1, R2
-          control  RegDst=1 ALUSrc=0 MemtoReg=0 ImmToReg=0 RegWrite=1 MemRead=0 MemWrite=0 ALUOp=SUB
+          control  RegDst=1 ALUSrc=0 MemtoReg=0 RegWrite=1 MemRead=0 MemWrite=0 Branch=0 BranchNe=0 Jump=0 ALUOp=SUB
           read     R1 = 3 (00000011), R2 = 5 (00000101)
           ALU      SUB -> 254 (11111110)
           write    R3 <- 254  (MemtoReg=0: ALU result)

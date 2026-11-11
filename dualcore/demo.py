@@ -199,7 +199,7 @@ def _bit(value: Optional[bool]) -> str:
 def show_control(word: int) -> str:
     s = ControlUnit().signals(decode(word))
     return (f"RegDst={_bit(s.reg_dst)} ALUSrc={_bit(s.alu_src)} MemtoReg={_bit(s.mem_to_reg)} "
-            f"ImmToReg={_bit(s.imm_to_reg)} RegWrite={_bit(s.reg_write)} MemRead={_bit(s.mem_read)} "
+            f"RegWrite={_bit(s.reg_write)} MemRead={_bit(s.mem_read)} "
             f"MemWrite={_bit(s.mem_write)} Branch={_bit(s.branch)} BranchNe={_bit(s.branch_ne)} "
             f"Jump={_bit(s.jump)} ALUOp={s.alu_op or 'X'}")
 
@@ -223,7 +223,8 @@ def explain_step(event: dict, regs_before: tuple[int, ...], core) -> list[str]:
         lines.append(f"memory   buffer mem[{d.address}] <- {event['stored']} "
                      f"(MemWrite=1, committed at end of tick)")
     elif d.mnemonic == "LOADI":
-        lines.append(f"write    R{d.rd} <- {d.immediate}  (ImmToReg=1: immediate from the instruction)")
+        lines.append(f"ALU      PASS imm {d.immediate} ({d.immediate:08b})  (ALUSrc=1: immediate as input B)")
+        lines.append(f"write    R{d.rd} <- {event['result']}  (MemtoReg=0: ALU result)")
     elif d.mnemonic == "NOT":
         a = regs_before[d.rs]
         lines.append(f"read     R{d.rs} = {a} ({a:08b})")

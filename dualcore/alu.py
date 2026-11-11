@@ -13,6 +13,10 @@ _OPERATIONS = {
     "SRL": lambda a, b: a >> b,              # logical: zeros shift in from the left
     "NOT": lambda a, b: ~a & MASK,           # bonus, unary: input b is ignored
     "SLT": lambda a, b: 1 if a < b else 0,   # stage 07: unsigned compare
+    # Internal ALU function, not an instruction: result = input B. LOADI uses
+    # it to carry its immediate through the ALU (it has no Rs field, and R0 is
+    # not hard-wired to zero, so there is nothing to OR the immediate with).
+    "PASS": lambda a, b: b,
 }
 
 

@@ -60,13 +60,12 @@ The control unit uses the signal names from the lecture's single-cycle MIPS cont
 | Signal | R-type | LOAD | STORE | HALT | LOADI | NOT |
 |---|---|---|---|---|---|---|
 | RegDst | 1 | 1 | X | X | 1 | 1 |
-| ALUSrc | 0 | X | X | X | X | X |
-| MemtoReg | 0 | 1 | X | X | X | 0 |
-| ImmToReg | 0 | 0 | 0 | 0 | 1 | 0 |
+| ALUSrc | 0 | X | X | X | 1 | X |
+| MemtoReg | 0 | 1 | X | X | 0 | 0 |
 | RegWrite | 1 | 1 | 0 | 0 | 1 | 1 |
 | MemRead | 0 | 1 | 0 | 0 | 0 | 0 |
 | MemWrite | 0 | 0 | 1 | 0 | 0 | 0 |
-| ALUOp | operation | X | X | X | X | NOT |
+| ALUOp | operation | X | X | X | PASS | NOT |
 
 Three differences from MIPS follow from our ISA (design choices, explained in `docs/ARCHITECTURE.md`):
 
@@ -83,7 +82,7 @@ Three differences from MIPS follow from our ISA (design choices, explained in `d
 3. **Register read**: Rs and Rt (ALUSrc = 0).
 4. **ALU** executes `ALUOp`.
 5. **Memory** read or write if MemRead/MemWrite is set.
-6. **Writeback** to Rd through the mux: immediate if ImmToReg, memory data if MemtoReg, otherwise the ALU result.
+6. **Writeback** to Rd through the mux: memory data if MemtoReg = 1, otherwise the ALU result.
 7. **Next PC** = PC + 1, or a branch/jump target after stage 07 (section 10b).
 
 The PC is an index into the instruction list, so it advances by **1, not MIPS PC + 4** (design choice): instructions sit in a Python list, not byte-addressed memory. On **HALT** the core sets `halted`, the PC stays on the HALT instruction, and later steps do nothing (PDF: "stop when HALT is encountered").
@@ -106,7 +105,7 @@ So a value stored in tick *n* becomes visible from tick *n + 1*, and if both cor
 
 The brief allows extra instructions. The original bonus added exactly two:
 
-- **LOADI Rd, imm8** lets a program create its own constants. Without it, register values must come from Python test setup or from memory. It also introduces the immediate-operand idea. Because the constant comes from neither the ALU nor memory, the writeback mux gets a third input selected by the new **ImmToReg** signal (design choice, similar to the extra path MIPS extensions add for `lui`).
+- **LOADI Rd, imm8** lets a program create its own constants. Without it, register values must come from Python test setup or from memory. It also introduces the immediate-operand idea. LOADI stays on the lecture datapath: immediate → ALUSrc = 1 → ALU → MemtoReg = 0 → register, like MIPS `ori $t0, $zero, imm`. The ALU uses an internal **PASS** function (result = input B; not an instruction), since LOADI has no Rs field and R0 is not hard-wired to zero (design choice).
 - **NOT Rd, Rs** adds one more bitwise ALU function at minimal cost. It is unary, so ALU input B is don't-care: `NOT 47 = 208` (`00101111 → 11010000`).
 
 The 11 basic opcodes are unchanged.
@@ -122,7 +121,7 @@ After the six original stages, the team asked for control flow so programs can e
 | 11 | J target | PC = target (0-255) |
 | 00 | invalid | keeps `0xC000` illegal |
 
-A taken branch goes to PC + 1 + offset, where offset is a 4-bit signed number (-8 to +7). This is the index version of the lecture's PC + 4 + (offset << 2). BEQ/BNE follow the lecture's beq control column: ALUSrc = 0, ALUOp = Subtract, Branch = 1, and the ALU's zero result feeds the PCSrc mux. Two signals are new: **BranchNe** inverts the zero test for BNE, and **Jump** selects the J target. SLTI is the first instruction to use ALUSrc = 1 (immediate as ALU input B).
+A taken branch goes to PC + 1 + offset, where offset is a 4-bit signed number (-8 to +7). This is the index version of the lecture's PC + 4 + (offset << 2). BEQ/BNE follow the lecture's beq control column: ALUSrc = 0, ALUOp = Subtract, Branch = 1, and the ALU's zero result feeds the PCSrc mux. Two signals are new: **BranchNe** inverts the zero test for BNE, and **Jump** selects the J target. SLTI shares LOADI's immediate path (ALUSrc = 1), using imm6 instead of imm8.
 
 Comparisons are unsigned, consistent with the rest of the ISA. R0 is not hard-wired to zero, so programs load 0 into a register before comparing against it.
 
