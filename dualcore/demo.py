@@ -1,10 +1,14 @@
 """Terminal demo: two cores with private registers communicating through shared memory.
 
 Run with:
-    python -m dualcore.demo                  scripted demo (core 0 STORE -> core 1 LOAD)
+    python -m dualcore.demo                  scripted demo: LOADI setup, core 0 STORE ->
+                                             core 1 LOAD (next-tick visibility), NOT
     python -m dualcore.demo "3 + 4"          compile and trace one expression on core 0
     python -m dualcore.demo "3 + 4" "9 - 2"  one expression per core, run side by side
     python -m dualcore.demo -i               type expressions at a prompt
+    python -m dualcore.demo -h               show this help
+
+Expression operators: + - & | ^ nor << >>  (operands 0..255, decimal, 0x.. or 0b..)
 """
 import re
 import sys
@@ -309,6 +313,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if not args:
         return run_scripted_demo()
+    if args[0] in ("-h", "--help"):
+        print(__doc__)
+        return 0
     if args[0] in ("-i", "--interactive"):
         return interactive()
     if len(args) > 2:

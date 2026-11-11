@@ -8,8 +8,8 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 | 02 ALU/single core | Approved |
 | 03 two independent cores | Approved |
 | 04 shared memory | Approved |
-| 05 bonus instructions | Done, awaiting human approval |
-| 06 report/demo | TODO |
+| 05 bonus instructions | Approved |
+| 06 report/demo | Done, awaiting human review |
 
 ## Checkpoints
 
@@ -55,3 +55,11 @@ The harness state in `.harness/state.json` is authoritative. Claude adds entries
 - **Decisions:** field layouts and opcodes from ISA.md; only these two bonuses (PDF / CLAUDE.md). `ImmToReg` as a third writeback-mux input is an implementation choice, since the immediate comes from neither the ALU nor memory (documented in ARCHITECTURE.md). The 11 required opcodes are unchanged.
 - **Tests:** `python scripts/harness.py verify` → integrity OK (13 protected files), stages 01–05: **17 run, 17 passed, 0 failed**. `python -m dualcore.demo` → 9/9 checks PASS, exit 0; expression mode `python -m dualcore.demo "200 + 100" "3 - 5"` exit 0.
 - **Limitations:** the expression mode still loads operands from memory rather than LOADI, and does not accept NOT expressions (kept as written by the team).
+
+### [STAGE 06] Final deliverables, results and demo script
+
+- **Files built/changed:** `docs/FINAL_REPORT.md` (1,299 prose words plus tables; sections map to the PDF's 12 deliverables), `docs/RESULTS.md` (verbatim test and demo output from local runs), `docs/DEMO_SCRIPT.md` (about 5-minute presentation sequence plus likely questions), `dualcore/demo.py` tidied (accurate docstring, `-h/--help`).
+- **CO concept:** connecting the whole design: block diagram → ISA/format → ALU → register file → control table → single-core cycle → dual-core independence → shared-memory clock rule → bonus instructions, with test evidence.
+- **Decisions:** the report labels each rule as PDF requirement or design choice. The deliverables list was read from `reference/CCEE324_Project_Instructions.pdf` (text extracted with the Python standard library; no tools installed).
+- **Tests:** `python scripts/harness.py verify` → integrity OK (13 protected files), stages 01–06: **19 run, 19 passed, 0 failed**; `python -m unittest discover -s tests` → 19 OK. `python -m dualcore.demo` → 9/9 PASS, exit 0; `python -m dualcore.demo "200 + 100" "3 - 5"` → exit 0; `"1 + 999"` → rejected, exit 2.
+- **Limitations:** simulator only (no HDL or timing); no branches, flags, pipeline or cache; the cores are stepped one after the other within a tick; no assembler. Final submission readiness is the team's decision.
