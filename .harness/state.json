@@ -1,11 +1,12 @@
 {
-  "stage": 6,
+  "stage": 7,
   "completed": [
     1,
     2,
     3,
     4,
-    5
+    5,
+    6
   ],
   "version": 1
 }
