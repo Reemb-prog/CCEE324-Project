@@ -5,7 +5,7 @@ Sources consulted: CCEE 324 Modules 01–04 and the Modules 01–03 solving sess
 **Aligned concepts:**
 
 - architecture vs organization, and the ISA;
-- binary instruction encodings and the R/I/J instruction formats;
+- binary instruction encodings and the R/I/J instruction formats (our six formats R, I, S, B, J, H map onto them);
 - binary, hexadecimal and two's complement;
 - register operands, writeback, and `$zero` as a hard-wired zero register;
 - MIPS `add`, `sub`, the logical operators, `slt`, `lw`, `sw`, `beq` and `j`;

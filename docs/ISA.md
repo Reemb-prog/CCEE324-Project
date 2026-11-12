@@ -6,18 +6,18 @@
 
 ## Instruction formats (MSB at left)
 
-The three format families are the lecture's R, I and J. The exact bit placements are **project design decisions**: the brief gives the widths and the instruction list but no field map.
+There are six formats, and each belongs to one of the lecture's MIPS families (R, I, J), except HALT. The exact bit placements are **project design decisions**: the brief gives the widths and the instruction list but no field map.
 
-| Format | Bit fields | Used by |
-|---|---|---|
-| R | `[15:12]=opcode [11:9]=Rd [8:6]=Rs [5:3]=Rt [2:0]=000` | ADD SUB AND OR XOR NOR SLL SRL, SLT; NOT (Rt field = 000) |
-| I (imm8) | `[15:12]=opcode [11:9]=Reg [8:1]=imm8 [0]=0` | LOAD (Reg=Rd), STORE (Reg=Rs), LOADI (Reg=Rd) |
-| I (imm6) | `[15:12]=1110 [11:9]=Rd [8:6]=Rs [5:0]=imm6` | SLTI |
-| I (branch) | `[15:12]=1100 [11:10]=kind [9:7]=Rs [6:4]=Rt [3:0]=offset4` | BEQ (kind 01), BNE (kind 10) |
-| J | `[15:12]=1100 [11:10]=11 [9:8]=00 [7:0]=target` | J |
-| HALT | `[15:12]=1111 [11:0]=0` | HALT |
+| Format | MIPS family | Bit fields | Used by |
+|---|---|---|---|
+| R | R-type | `[15:12]=opcode [11:9]=Rd [8:6]=Rs [5:3]=Rt [2:0]=000` | ADD SUB AND OR XOR NOR SLL SRL, SLT; NOT (Rt field = 000) |
+| I | I-type | `[15:12]=opcode [11:9]=Reg [8:1]=imm8 [0]=0` | LOAD (Reg=Rd), STORE (Reg=Rs), LOADI (Reg=Rd) |
+| S | I-type (short immediate) | `[15:12]=1110 [11:9]=Rd [8:6]=Rs [5:0]=imm6` | SLTI |
+| B | I-type (branch) | `[15:12]=1100 [11:10]=kind [9:7]=Rs [6:4]=Rt [3:0]=offset4` | BEQ (kind 01), BNE (kind 10) |
+| J | J-type | `[15:12]=1100 [11:10]=11 [9:8]=00 [7:0]=target` | J |
+| H | special | `[15:12]=1111 [11:0]=0` | HALT |
 
-The imm8 instructions have no Rs field, so their base register is R0. LOAD, STORE and LOADI compute `R0 + imm8` in the ALU, like MIPS `lw $t0, 100($zero)` and `addi $t0, $zero, 5`. So the memory address is effectively absolute (0..255).
+The I-format instructions have no Rs field, so their base register is R0. LOAD, STORE and LOADI compute `R0 + imm8` in the ALU, like MIPS `lw $t0, 100($zero)` and `addi $t0, $zero, 5`. So the memory address is effectively absolute (0..255).
 
 | opcode | mnemonic | result / effect |
 |---|---|---|

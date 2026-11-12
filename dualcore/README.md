@@ -4,7 +4,7 @@ A dual-core 8-bit processor simulator. Each module is one block of the lecture's
 
 | File | Block |
 |---|---|
-| `isa.py` | Instruction formats (R / I / J / HALT): encoder and strict decoder |
+| `isa.py` | Instruction formats (R, I, S, B, J, H → MIPS R/I/J): encoder and strict decoder |
 | `registers.py` | Register file: 8 × 8-bit registers, one per core |
 | `control.py` | Control unit: lecture signals, plus Jump (textbook) and BranchNe (for BNE) |
 | `alu.py` | ALU: ADD SUB AND OR XOR NOR SLL SRL, plus bonus NOT and SLT; 8-bit wrap |

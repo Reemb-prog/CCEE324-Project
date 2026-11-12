@@ -60,7 +60,7 @@ Per-stage coverage:
 
 | Stage | Tests | What they check |
 |---|---|---|
-| 01 | 6 | R/M/H encoding and decoding, all 8 ALU opcodes, invalid words rejected, 8 private writable 8-bit registers, RegWrite/MemRead/MemWrite signals |
+| 01 | 6 | R/I/H encoding and decoding, all 8 ALU opcodes, invalid words rejected, 8 private writable 8-bit registers, RegWrite/MemRead/MemWrite signals |
 | 02 | 4 | All 8 ALU operations with 8-bit masking, bad ALU inputs, single-core PC advance and HALT freeze, missing-HALT error |
 | 03 | 2 | Separate cores/register files, independent PCs, per-core HALT, cycle count, `run()` budget error |
 | 04 | 3 | 256-byte bounds, STORE visible to the other core only on the next tick, same-address conflict (core 1 wins) |
