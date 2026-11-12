@@ -32,16 +32,18 @@ The brief allows extra instructions as a **bonus**, and we added seven:
 - LOADI and NOT, for constants and one more logical operation;
 - SLT, SLTI, BEQ, BNE and J, so programs can express `if` and `while`.
 
-The brief gives the opcodes and widths but not the field positions. We use the lecture's three format families (design choice for the exact bits):
+The brief gives the opcodes and widths but not the field positions. We use six formats, each mapped onto one of the lecture's MIPS families (design choice for the exact bits):
 
-| Format | Bit fields | Used by |
-|---|---|---|
-| R | `opcode[15:12] Rd[11:9] Rs[8:6] Rt[5:3] 000` | ADD SUB AND OR XOR NOR SLL SRL, SLT; NOT (Rt = 000) |
-| I (imm8) | `opcode[15:12] Reg[11:9] imm8[8:1] 0` | LOAD (Reg = Rd), STORE (Reg = Rs), LOADI |
-| I (imm6) | `1110 Rd[11:9] Rs[8:6] imm6[5:0]` | SLTI |
-| I (branch) | `1100 kind[11:10] Rs[9:7] Rt[6:4] offset4[3:0]` | BEQ (kind 01), BNE (kind 10) |
-| J | `1100 11 00 target[7:0]` | J |
-| HALT | `1111 000000000000` | HALT |
+| Format | MIPS family | Bit fields | Used by |
+|---|---|---|---|
+| R | R-type | `opcode[15:12] Rd[11:9] Rs[8:6] Rt[5:3] 000` | ADD SUB AND OR XOR NOR SLL SRL, SLT; NOT (Rt = 000) |
+| I | I-type | `opcode[15:12] Reg[11:9] imm8[8:1] 0` | LOAD (Reg = Rd), STORE (Reg = Rs), LOADI |
+| S | I-type (short immediate) | `1110 Rd[11:9] Rs[8:6] imm6[5:0]` | SLTI |
+| B | I-type (branch) | `1100 kind[11:10] Rs[9:7] Rt[6:4] offset4[3:0]` | BEQ (kind 01), BNE (kind 10) |
+| J | J-type | `1100 11 00 target[7:0]` | J |
+| H | special | `1111 000000000000` | HALT |
+
+NOT is simply R-type with an unused Rt. LOADI is I-type like MIPS `addi`/`ori`, not R-type: it behaves like `addi Rd, $zero, imm8`.
 
 **Opcodes:**
 
@@ -60,7 +62,7 @@ The brief gives the opcodes and widths but not the field positions. We use the l
 
 This is like hardware raising an illegal-instruction exception.
 
-**R0 is hard-wired to zero**, like MIPS `$zero` (design choice). The imm8 instructions have no Rs field, so they use R0 as their base:
+**R0 is hard-wired to zero**, like MIPS `$zero` (design choice). The I-format instructions have no Rs field, so they use R0 as their base:
 
 - LOAD/STORE address = R0 + imm8, like `lw $t0, 100($zero)`, so addresses are effectively absolute;
 - LOADI computes Rd = R0 + imm8, like `addi $t0, $zero, 5`.

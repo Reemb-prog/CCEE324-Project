@@ -1,16 +1,12 @@
 """Instruction set: 16-bit machine-word encoding and decoding (see docs/ISA.md).
 
-Field layout (bit 15 is the most significant bit):
-    R form: [15:12]=opcode [11:9]=Rd  [8:6]=Rs [5:3]=Rt [2:0]=000
-    M form: [15:12]=opcode [11:9]=Reg [8:1]=address    [0]=0
-    I form: [15:12]=opcode [11:9]=Rd  [8:1]=immediate  [0]=0       (bonus LOADI)
-    U form: [15:12]=opcode [11:9]=Rd  [8:6]=Rs [5:0]=000000        (bonus NOT)
-    H form: [15:12]=1111   [11:0]=0
-Stage 07 extension:
-    S form: [15:12]=1110   [11:9]=Rd  [8:6]=Rs [5:0]=imm6          (SLTI)
-    B form: [15:12]=1100   [11:10]=kind [9:7]=Rs [6:4]=Rt [3:0]=offset  (BEQ 01, BNE 10)
-    J form: [15:12]=1100   [11:10]=11   [9:8]=00 [7:0]=target            (J)
-    SLT uses the R form with opcode 1101.
+Field layout (bit 15 is the most significant bit), with the MIPS family:
+    R (R-type): [15:12]=opcode [11:9]=Rd  [8:6]=Rs [5:3]=Rt [2:0]=000   8 ALU ops, SLT, NOT (Rt=000)
+    I (I-type): [15:12]=opcode [11:9]=Reg [8:1]=imm8 [0]=0              LOAD, STORE, LOADI
+    S (I-type): [15:12]=1110   [11:9]=Rd  [8:6]=Rs [5:0]=imm6           SLTI
+    B (I-type): [15:12]=1100   [11:10]=kind [9:7]=Rs [6:4]=Rt [3:0]=offset  BEQ (01), BNE (10)
+    J (J-type): [15:12]=1100   [11:10]=11   [9:8]=00 [7:0]=target           J
+    H (special): [15:12]=1111  [11:0]=0                                  HALT
 """
 from dataclasses import dataclass
 
@@ -144,7 +140,7 @@ def decode(word: int) -> DecodedInstruction:
 
     if mnemonic in ("LOAD", "STORE"):
         if word & 0b1:
-            raise ValueError(f"M-form unused bit [0] must be zero: {word:#06x}")
+            raise ValueError(f"I-form unused bit [0] must be zero: {word:#06x}")
         reg = (word >> 9) & 0b111
         address = (word >> 1) & 0xFF
         if mnemonic == "LOAD":
@@ -160,7 +156,7 @@ def decode(word: int) -> DecodedInstruction:
 
     if mnemonic == "NOT":
         if word & 0b111111:
-            raise ValueError(f"U-form unused bits [5:0] must be zero: {word:#06x}")
+            raise ValueError(f"NOT (R-form, Rt=000) unused bits [5:0] must be zero: {word:#06x}")
         return DecodedInstruction(opcode, mnemonic,
                                   rd=(word >> 9) & 0b111,
                                   rs=(word >> 6) & 0b111)

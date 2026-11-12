@@ -174,22 +174,22 @@ def fields(word: int) -> str:
     d = decode(word)
     op = f"{d.opcode:04b}"
     if d.mnemonic == "HALT":
-        return f"{op} 000000000000          (opcode | unused)"
+        return f"{op} 000000000000          (H: opcode | unused)"
     if d.mnemonic in ("LOAD", "STORE"):
         reg = d.rd if d.mnemonic == "LOAD" else d.rs
-        return f"{op} {reg:03b} {d.address:08b} 0      (opcode | reg | address | 0)"
+        return f"{op} {reg:03b} {d.address:08b} 0      (I: opcode | reg | imm8 address | 0)"
     if d.mnemonic == "LOADI":
-        return f"{op} {d.rd:03b} {d.immediate:08b} 0      (opcode | rd | immediate | 0)"
+        return f"{op} {d.rd:03b} {d.immediate:08b} 0      (I: opcode | rd | imm8 | 0)"
     if d.mnemonic == "NOT":
-        return f"{op} {d.rd:03b} {d.rs:03b} 000000      (opcode | rd | rs | unused)"
+        return f"{op} {d.rd:03b} {d.rs:03b} 000 000     (R: opcode | rd | rs | rt=000 | unused)"
     if d.mnemonic == "SLTI":
-        return f"{op} {d.rd:03b} {d.rs:03b} {d.immediate:06b}      (opcode | rd | rs | imm6)"
+        return f"{op} {d.rd:03b} {d.rs:03b} {d.immediate:06b}      (S: opcode | rd | rs | imm6)"
     if d.mnemonic in ("BEQ", "BNE"):
         kind = "01" if d.mnemonic == "BEQ" else "10"
-        return f"{op} {kind} {d.rs:03b} {d.rt:03b} {d.offset & 0xF:04b}   (opcode | kind | rs | rt | offset)"
+        return f"{op} {kind} {d.rs:03b} {d.rt:03b} {d.offset & 0xF:04b}   (B: opcode | kind | rs | rt | offset)"
     if d.mnemonic == "J":
-        return f"{op} 11 00 {d.address:08b}     (opcode | kind | 00 | target)"
-    return f"{op} {d.rd:03b} {d.rs:03b} {d.rt:03b} 000     (opcode | rd | rs | rt | unused)"
+        return f"{op} 11 00 {d.address:08b}     (J: opcode | kind | 00 | target)"
+    return f"{op} {d.rd:03b} {d.rs:03b} {d.rt:03b} 000     (R: opcode | rd | rs | rt | unused)"
 
 
 def _bit(value: Optional[bool]) -> str:
