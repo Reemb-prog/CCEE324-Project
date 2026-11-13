@@ -34,6 +34,21 @@ One session can handle several stages; keeping the same session avoids repeated 
 | `python -m unittest discover -s tests -v` | Full suite; expected to fail until stage 6 is built |
 | `python -m dualcore.demo` | Final demonstrator; available once implemented |
 
+## Datapath visualizer (optional Streamlit web page)
+
+A post-harness extension for the live demo: run the terminal demos or your own assembly and watch
+both cores execute, tick by tick, on an animated lecture-style single-cycle datapath, with a
+terminal-style text log beside it. The simulator in `dualcore/` is used unchanged.
+
+```powershell
+py -m pip install -r requirements-visualizer.txt
+py -m streamlit run app.py
+```
+
+Toolbar: ⏮ ◀ ▶/⏸ ▶| ⏭, step by stage or by tick, speed, scrubber; keys ← → space Home End.
+Visualizer tests (stdlib only): `python -m unittest discover -s visualizer/tests -t .`
+Design and rationale: `docs/VISUALIZER_PLAN.md`.
+
 ## How the six stages map to the instructor's four milestones
 
 | Stage | Work | Instructor milestone |

@@ -1,6 +1,6 @@
 # Plan: Streamlit Datapath Visualizer (post-harness extension)
 
-Status: **planned, not implemented.** Human-requested extension after all harness
+Status: **implemented** (see PROGRESS.md, [EXTENSION]). Original plan below. Human-requested extension after all harness
 stages (01–07) were approved. It is *not* a harness stage: `.harness/`, `tests/`,
 `docs/ISA.md`, `docs/INTERFACES.md`, `contracts.sha256` stay untouched, and
 `python scripts/harness.py verify` must keep passing unchanged.
