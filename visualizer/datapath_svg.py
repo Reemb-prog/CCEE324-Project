@@ -15,7 +15,7 @@ Differences from the MIPS figure, all from this project's ISA (docs/ISA.md):
     so the "sign extend" oval is an "Imm" oval.
   * A Jump mux after the PCSrc mux handles J (textbook extension).
 """
-CORE_COLORS = ["#2563EB", "#9333EA"]
+CORE_COLORS = ["#285A9F", "#76519B"]
 CORE_HEIGHT = 372
 CORE1_Y = 392
 WIDTH = 930
@@ -24,7 +24,6 @@ MEM_X, MEM_W = 772, 150
 
 # Stage numbers (0-based): 0 fetch, 1 decode/reg read, 2 execute, 3 memory, 4 writeback, 5 next PC
 WIRES = {
-    #  id           stage  points (core-local coordinates)
     "pc_im":      (0, [(80, 185), (120, 185)]),
     "pc_add":     (0, [(60, 150), (60, 62), (140, 62)]),
     "add_pcp1":   (0, [(180, 66), (640, 66)]),
@@ -52,8 +51,6 @@ WIRES = {
     "jmux_pc":    (5, [(722, 90), (746, 90), (746, 16), (22, 16), (22, 185), (40, 185)]),
 }
 
-# Where along each wire (0..1 of its length) the parked value label sits;
-# chosen so labels do not cover blocks or other labels. Default 0.5.
 LABEL_AT = {
     "pc_add": 0.3, "add_pcp1": 0.35, "bus_cu": 0.75, "bus_rr1": 0.7, "bus_wr": 0.75,
     "bus_imm": 0.8, "imm_mux": 0.35, "imm_badd": 0.78, "imm_jump": 0.62, "pcp1_badd": 0.75,
@@ -61,7 +58,6 @@ LABEL_AT = {
     "zero_pcsrc": 0.75, "rd1_alu": 0.45,
 }
 
-# Signal tags: (signal name, x, y) drawn near the unit the signal controls.
 TAGS = [
     ("RegWrite", 395, 133), ("RegDst", 296, 242), ("ALUSrc", 511, 194),
     ("ALUOp", 590, 274), ("MemtoReg", 636, 334), ("PCSrc", 651, 42), ("Jump", 711, 46),
@@ -86,63 +82,49 @@ def _core(core_id: int) -> str:
     color = CORE_COLORS[core_id]
     g = [f'<g id="{c}" class="core" transform="translate(0 {oy})" style="--core:{color}">',
          f'<rect class="corebg" x="4" y="4" width="{MEM_X - 14}" height="{CORE_HEIGHT - 8}" rx="16"/>',
-         f'<text class="coretitle" x="770" y="{CORE_HEIGHT - 12}" text-anchor="end">CORE {core_id}</text>',
+         f'<text class="coretitle" x="24" y="32" text-anchor="start">CORE {core_id}</text>',
          f'<text id="{c}-asm" class="asm" x="96" y="{CORE_HEIGHT - 14}"></text>']
 
-    # Wires first (behind blocks).
     for wid, (stage, pts) in WIRES.items():
         g.append(f'<path id="{c}-{wid}" class="wire" data-stage="{stage}" '
                  f'data-lf="{LABEL_AT.get(wid, 0.5)}" d="{_path(pts)}" marker-end="url(#arr-{c})"/>')
     g.append(f'<path class="wire const" d="M 128 82 L 140 82"/>'
              f'<text class="small" x="122" y="86" text-anchor="end">1</text>')
 
-    # PC
     g.append(f'<rect id="{c}-b-pc" class="blk" x="40" y="150" width="40" height="70" rx="6"/>'
              f'<text class="bt" x="60" y="178">PC</text>'
              f'<text id="{c}-v-pc" class="bv" x="60" y="200"></text>')
-    # +1 adder
     g.append(f'<path id="{c}-b-add" class="blk" d="M 140 36 L 180 52 L 180 80 L 140 96 L 140 72 '
              f'L 148 66 L 140 60 Z"/><text class="bt s" x="164" y="70">+1</text>')
-    # Instruction memory
     g.append(f'<rect id="{c}-b-im" class="blk" x="120" y="140" width="112" height="112" rx="6"/>'
              f'<text class="bt" x="176" y="168">Instruction</text><text class="bt" x="176" y="183">memory</text>'
              f'<text id="{c}-v-im" class="bv mono" x="176" y="208"></text>'
              f'<text class="small" x="124" y="181" text-anchor="start">addr</text>'
              f'<text class="small" x="228" y="208" text-anchor="end">instr</text>')
-    # Control unit
     g.append(f'<ellipse id="{c}-b-cu" class="blk" cx="333" cy="100" rx="48" ry="26"/>'
              f'<text class="bt" x="333" y="96">Control</text>'
              f'<text id="{c}-v-cu" class="bv s" x="333" y="112"></text>')
-    # Register file
     g.append(f'<rect id="{c}-b-rf" class="blk" x="330" y="140" width="130" height="132" rx="6"/>'
              f'<text class="bt" x="395" y="268">Registers</text>')
     for label, y in (("Read reg 1", 163), ("Read reg 2", 198), ("Write reg", 233), ("Write data", 261)):
         g.append(f'<text class="port" x="334" y="{y}">{label}</text>')
     for label, y in (("Read data 1", 173), ("Read data 2", 228)):
         g.append(f'<text class="port" x="456" y="{y}" text-anchor="end">{label}</text>')
-    # Immediate
     g.append(f'<ellipse id="{c}-b-imm" class="blk" cx="395" cy="305" rx="35" ry="20"/>'
              f'<text class="bt s" x="395" y="301">Imm</text>'
              f'<text id="{c}-v-imm" class="bv s" x="395" y="316"></text>')
-    # ALUSrc mux
     g.append(f'<g id="{c}-b-alusrc">{_mux(500, 202, 70)}</g>')
-    # ALU
     g.append(f'<path id="{c}-b-alu" class="blk" d="M 560 150 L 620 175 L 620 235 L 560 260 L 560 215 '
              f'L 572 205 L 560 195 Z"/><text class="bt" x="594" y="200">ALU</text>'
              f'<text id="{c}-v-alu" class="bv s" x="594" y="226"></text>'
              f'<text class="small" x="624" y="181" text-anchor="start">Zero</text>')
-    # Branch adder
     g.append(f'<path id="{c}-b-badd" class="blk" d="M 560 70 L 600 86 L 600 114 L 560 130 L 560 106 '
              f'L 568 100 L 560 94 Z"/><text class="bt s" x="583" y="104">Add</text>')
-    # PCSrc and Jump muxes
     g.append(f'<g id="{c}-b-pcsrc">{_mux(640, 50, 66)}</g>')
     g.append(f'<g id="{c}-b-jmux">{_mux(700, 56, 66)}</g>')
-    # MemtoReg mux (faces left: inputs on the right)
     g.append(f'<g id="{c}-b-memtoreg">{_mux(690, 280, 58, labels=("1", "0"))}</g>')
-    # Signal tags
     for name, x, y in TAGS:
         g.append(f'<text id="{c}-t-{name}" class="tag" x="{x}" y="{y}"></text>')
-    # Token layer (filled by the player)
     g.append(f'<g id="{c}-tokens"></g>')
     g.append(f'<g id="{c}-halt" class="haltmask"><rect x="4" y="4" width="{MEM_X - 14}" '
              f'height="{CORE_HEIGHT - 8}" rx="16"/><text x="380" y="190">HALTED</text>'
@@ -173,10 +155,6 @@ def build_svg() -> str:
     return (f'<svg id="dp" viewBox="0 0 {WIDTH} {HEIGHT}" xmlns="http://www.w3.org/2000/svg">'
             f'<defs>{defs}</defs>{_core(0)}{_core(1)}{memory}</svg>')
 
-
-# ---------------------------------------------------------------------------
-# Per-instruction data: which wires carry what
-# ---------------------------------------------------------------------------
 
 def _fmt(value) -> str:
     return "" if value is None else str(value)
@@ -227,7 +205,7 @@ def wire_labels(w: dict) -> dict[str, str]:
     if w["write_reg"] is not None:
         if s["MemtoReg"] == "0":
             on["alu_wb"] = str(w["alu_result"])
-        on["mux_wb"] = str(w["write_data"]) + (" ✗R0" if w["r0_discard"] else "")
+        on["mux_wb"] = str(w["write_data"]) + (" R0" if w["r0_discard"] else "")
     on["pcsrc_jmux"] = str(w["branch_target"] if w["taken"] else w["pc_plus_1"])
     on["jmux_pc"] = f"PC {w['next_pc']}"
     return on

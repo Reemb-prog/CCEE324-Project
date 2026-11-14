@@ -3,123 +3,236 @@
 <head>
 <meta charset="utf-8">
 <style>
-  :root {
-    --bg: #F7F9FE; --card: #FFFFFF; --line: #DEE6F4; --ink: #172B4D; --muted: #64748B;
-    --off: #D5DDEA; --c0: #2563EB; --c1: #9333EA; --c0soft: #DBE7FF; --c1soft: #F0E2FF;
-    --term: #0F172A; --termink: #CBD5E1;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
-         color: var(--ink); background: var(--bg); }
-  /* ---------- toolbar ---------- */
-  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px;
-         background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; }
-  .bar button { border: 1px solid #CBD7EC; background: #fff; border-radius: 8px; min-width: 36px;
-                height: 32px; font-size: 15px; cursor: pointer; color: var(--ink); }
-  .bar button:hover { border-color: var(--c0); }
-  .bar button.play { background: var(--c0); color: #fff; border-color: var(--c0); min-width: 46px; }
-  .bar select { height: 32px; border-radius: 8px; border: 1px solid #CBD7EC; padding: 0 6px; }
-  .bar input[type=range] { flex: 1; min-width: 140px; accent-color: var(--c0); }
-  .pos { font: 600 13px Consolas, monospace; min-width: 150px; text-align: right; }
-  .stages { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
-  .stages span { padding: 3px 10px; border-radius: 999px; font-size: 12px; cursor: pointer;
-                 background: #EEF2F8; color: var(--muted); border: 1px solid transparent; }
-  .stages span.done { background: var(--c0soft); color: var(--ink); }
-  .stages span.cur { background: var(--c0); color: #fff; font-weight: 600; }
-  /* ---------- layout ---------- */
-  /* Default (Streamlit column width): diagram full width, text above and below.
-     Very wide screens: diagram left, side panel right. */
-  .grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
-  .side { display: grid; grid-template-columns: minmax(250px, 1fr) minmax(250px, 1fr) minmax(300px, 1.3fr);
-          gap: 8px; min-width: 0; }
-  @media (max-width: 900px) { .side { grid-template-columns: 1fr; } }
-  @media (min-width: 1700px) {
-    .grid { grid-template-columns: minmax(0, 2.2fr) minmax(320px, 1fr); }
-    .side { display: flex; flex-direction: column; }
-  }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px; min-width: 0; }
-  .explrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-  @media (max-width: 700px) { .explrow { grid-template-columns: 1fr; } }
-  .stagetitle { font: 700 13px "Segoe UI", Arial; color: #415574; margin: 0 0 6px 2px; }
-  h4 { margin: 0 0 6px; font-size: 13px; color: #415574; }
-  /* ---------- svg ---------- */
-  svg { width: 100%; height: auto; display: block; }
-  .corebg { fill: #FBFCFF; stroke: var(--line); }
-  .coretitle { font: 800 15px Arial; fill: var(--core); letter-spacing: .06em; }
-  .asm { font: 600 12px Consolas, monospace; fill: var(--ink); }
-  .blk { fill: #F8FAFD; stroke: #B9C7DD; stroke-width: 1.4; transition: fill .25s, stroke .25s; }
-  .blk.on { fill: #fff; stroke: var(--core); stroke-width: 2; }
-  .blk.cur { stroke-width: 3.2; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--core) 45%, transparent)); }
-  g.on > .blk, g.cur > .blk { fill: #fff; stroke: var(--core); stroke-width: 2; }
-  g.cur > .blk { stroke-width: 3.2; }
-  .memblk { fill: #FFFBEB; stroke: #D9B44A; }
-  .bt { font: 700 12px Arial; fill: var(--ink); text-anchor: middle; }
-  .bt.s { font-size: 11px; }
-  .bv { font: 700 12px Consolas, monospace; fill: var(--core); text-anchor: middle; }
-  .bv.s { font-size: 10.5px; }
-  .mt { font: 10px Arial; fill: var(--muted); text-anchor: middle; }
-  .port { font: 9.5px Arial; fill: #7184A0; }
-  .small { font: 9.5px Arial; fill: #7184A0; text-anchor: middle; }
-  .tag { font: 700 10px Consolas, monospace; fill: #B45309; text-anchor: middle; opacity: 0; transition: opacity .3s; }
-  .tag.show { opacity: 1; }
-  .wire { fill: none; stroke: var(--off); stroke-width: 1.4; opacity: .7; marker-end: none; transition: stroke .25s; }
-  .wire.const { stroke: #B9C7DD; opacity: 1; }
-  .wire.pend { stroke: color-mix(in srgb, var(--core) 30%, white); stroke-width: 2; opacity: 1; stroke-dasharray: 5 4; }
-  .wire.done { stroke: var(--core); stroke-width: 2.6; opacity: 1; }
-  .wire.live { stroke: var(--core); stroke-width: 3.2; opacity: 1; }
-  .wire.done, .wire.live { marker-end: var(--mk); }
-  .tok rect { fill: var(--core); rx: 6; }
-  .tok text { font: 700 10.5px Consolas, monospace; fill: #fff; text-anchor: middle; }
-  .lbl rect { fill: #fff; stroke: var(--core); stroke-width: 1; rx: 5; }
-  .lbl text { font: 700 9.5px Consolas, monospace; fill: var(--core); text-anchor: middle; }
-  .haltmask { display: none; }
-  .haltmask.show { display: block; }
-  .haltmask rect { fill: rgba(241, 245, 249, .82); }
-  .haltmask text { font: 800 26px Arial; fill: #94A3B8; text-anchor: middle; letter-spacing: .2em; }
-  .haltmask text.sub { font: 600 13px Arial; letter-spacing: 0; }
-  .cell text { font: 11px Consolas, monospace; fill: var(--ink); }
-  .cell rect { fill: #fff; stroke: #E5D9A8; rx: 4; }
-  .cell.rd0 rect { stroke: var(--c0); stroke-width: 2.2; }
-  .cell.rd1 rect { stroke: var(--c1); stroke-width: 2.2; }
-  .cell.wr0 rect { stroke: var(--c0); stroke-width: 2.2; stroke-dasharray: 4 3; fill: var(--c0soft); }
-  .cell.wr1 rect { stroke: var(--c1); stroke-width: 2.2; stroke-dasharray: 4 3; fill: var(--c1soft); }
-  .cell.chg rect { fill: #FEF3C7; stroke: #D97706; stroke-width: 2; }
-  /* ---------- side panel ---------- */
-  .explain { border-left: 4px solid var(--c0); padding: 6px 8px; border-radius: 8px; background: #F5F8FF;
-             font-size: 12.5px; line-height: 1.45; min-height: 52px; }
-  .explain.k1 { border-color: var(--c1); background: #FAF5FF; }
-  .explain b { display: block; font-size: 12px; margin-bottom: 2px; }
-  .k0 b { color: var(--c0); } .k1 b { color: var(--c1); }
-  .regs { display: grid; grid-template-columns: 52px repeat(8, 1fr); gap: 3px; font: 11.5px Consolas, monospace; }
-  .regs div { text-align: center; padding: 3px 0; border-radius: 5px; background: #F1F5F9; }
-  .regs .h { background: none; color: var(--muted); font-size: 10.5px; }
-  .regs .n { background: none; font-weight: 700; text-align: left; }
-  .regs .flash { background: #FDE68A; font-weight: 700; }
-  .progs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .prog { font: 11px Consolas, monospace; max-height: 170px; overflow: auto; border: 1px solid var(--line);
-          border-radius: 8px; padding: 3px 0; }
-  .prog div { padding: 1px 6px; white-space: pre; }
-  .prog div.at0 { background: var(--c0soft); font-weight: 700; }
-  .prog div.at1 { background: var(--c1soft); font-weight: 700; }
-  .term { background: var(--term); color: var(--termink); font: 11.5px/1.45 Consolas, monospace;
-          border-radius: 10px; padding: 8px; height: 230px; overflow: auto; white-space: pre; }
-  .term .t { cursor: pointer; display: block; }
-  .term .t:hover { background: #1E293B; }
-  .term .cur { background: #1E3A8A; color: #fff; }
-  .term .hd { color: #FBBF24; }
-  .term .c0 { color: #93C5FD; } .term .c1 { color: #D8B4FE; } .term .sm { color: #FCD34D; }
-  .term .future { opacity: .35; }
-  .empty { padding: 30px; text-align: center; color: var(--muted); }
+:root {
+  --bg:#F3F5F8; --card:#FFFFFF; --line:#D9E1EA;
+  --ink:#17263A; --muted:#64748B; --off:#B7C3D2;
+  --c0:#285A9F; --c1:#76519B;
+  --c0soft:#E7EFF9; --c1soft:#F0EAF6;
+  --term:#111C2B; --termink:#D9E2EC;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:Inter,"Segoe UI",Arial,sans-serif;
+}
+#app { display:grid; gap:9px; }
+
+.bar {
+  position:sticky; top:0; z-index:5;
+  display:flex; flex-wrap:wrap; align-items:center;
+  gap:6px; padding:9px 10px;
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:8px;
+  box-shadow:0 2px 8px rgba(24,39,58,.06);
+}
+.bar button {
+  min-width:58px; height:35px; padding:0 12px;
+  border:1px solid #C7D2DF;
+  border-radius:6px; background:#fff;
+  color:var(--ink); font-size:12px;
+  font-weight:650; cursor:pointer;
+}
+.bar button:hover { background:#EDF3F9; border-color:#7894B5; }
+.bar button.play {
+  min-width:68px; background:#285A9F;
+  color:#fff; border-color:#285A9F;
+}
+.bar button.play:hover { background:#204B85; }
+.bar select {
+  height:35px; border:1px solid #C7D2DF;
+  border-radius:6px; padding:0 8px;
+  color:var(--ink); background:#fff;
+}
+.bar input[type=range] { flex:1; min-width:140px; accent-color:var(--c0); }
+.pos {
+  min-width:150px; text-align:right;
+  font:600 11.5px Consolas,monospace;
+  color:#43556C;
+}
+
+.stages { display:flex; flex-wrap:wrap; gap:5px; }
+.stages span {
+  padding:6px 9px; border-radius:5px;
+  background:#E8EDF3; color:#53647A;
+  font-size:11px; cursor:pointer;
+}
+.stages span.done { background:#E1EAF5; color:#344B68; }
+.stages span.cur { background:#285A9F; color:white; }
+
+.stagetitle { font-size:13px; font-weight:700; color:#2D435D; }
+.explrow { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.explain {
+  border-left:3px solid var(--c0);
+  border-radius:6px; background:#EAF1F9;
+  color:#293D54; padding:9px 11px;
+  min-height:58px; font-size:12px; line-height:1.45;
+}
+.explain.k1 { border-color:var(--c1); background:#F1ECF7; }
+.explain b { display:block; font-size:12px; margin-bottom:2px; }
+.k0 b { color:var(--c0); }
+.k1 b { color:var(--c1); }
+
+.grid { display:grid; grid-template-columns:minmax(0,1fr); gap:9px; }
+.card {
+  background:var(--card); border:1px solid var(--line);
+  border-radius:8px; padding:10px;
+  box-shadow:0 1px 2px rgba(20,35,55,.035);
+  min-width:0;
+}
+.diagram-card { padding:8px 10px 10px; }
+.diagram-toolbar {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; padding:1px 2px 9px;
+  border-bottom:1px solid #E6EBF1; margin-bottom:8px;
+}
+.diagram-toolbar strong { display:block; font-size:12px; color:#253B55; }
+.diagram-toolbar span { display:block; color:var(--muted); font-size:10.5px; margin-top:2px; }
+
+.zoom-controls { display:flex; align-items:center; gap:5px; flex-shrink:0; }
+.zoom-controls button {
+  border:1px solid #C9D4E0; background:#fff;
+  color:#263B54; border-radius:5px;
+  min-width:31px; height:29px; padding:0 8px;
+  font-size:12px; font-weight:650; cursor:pointer;
+}
+.zoom-controls button:hover { border-color:var(--c0); background:#F1F5FA; }
+.zoom-controls #zoomLabel {
+  min-width:42px; text-align:right;
+  font:600 10px Consolas,monospace; color:#52647A;
+}
+.diagram-viewport {
+  width:100%; overflow:auto;
+  border-radius:5px; background:#FBFCFE;
+}
+.diagram-stage { width:100%; min-width:900px; transform-origin:top left; }
+.diagram-stage svg { width:100%; height:auto; display:block; }
+
+.side {
+  display:grid;
+  grid-template-columns:minmax(260px,.95fr) minmax(280px,1fr) minmax(300px,1.2fr);
+  gap:9px; min-width:0; align-items:stretch;
+}
+.side .card { min-width:0; }
+h4 { color:#2E435D; font-size:12px; font-weight:700; margin:0 0 9px; }
+
+.regs {
+  display:grid;
+  grid-template-columns:54px repeat(8,minmax(25px,1fr));
+  gap:4px; font:11px Consolas,monospace;
+}
+.regs div {
+  text-align:center; padding:5px 1px;
+  border:1px solid transparent; border-radius:4px;
+  background:#F0F3F7; color:#26384F;
+}
+.regs .h { background:transparent; color:#66768A; font-size:10px; border:0; }
+.regs .n { background:transparent; font-weight:700; text-align:left; border:0; }
+.regs .flash {
+  background:#DCE8F7; border-color:#AFC4DF;
+  color:#183F76; font-weight:750;
+}
+
+.progs { display:grid; grid-template-columns:1fr 1fr; gap:7px; min-width:0; }
+.prog {
+  min-width:0; background:#FBFCFE;
+  border:1px solid var(--line); border-radius:5px;
+  font:10.5px/1.55 Consolas,monospace;
+  max-height:230px; overflow:auto;
+}
+.prog div { padding:3px 6px; white-space:pre; }
+.prog div.at0 { background:#E7EFF9; color:#204B85; border-left:3px solid var(--c0); }
+.prog div.at1 { background:#F0EAF6; color:#624482; border-left:3px solid var(--c1); }
+
+.term {
+  height:270px; overflow:auto; white-space:pre;
+  background:#111C2B; color:#D9E2EC;
+  border:1px solid #27364A; border-radius:6px;
+  padding:9px; font:10.5px/1.55 Consolas,monospace;
+}
+.term .t { cursor:pointer; display:block; padding:1px 3px; border-radius:2px; }
+.term .t:hover { background:#26364B; }
+.term .cur { background:#294463; color:#fff; }
+.term .hd { color:#D8C18C; font-weight:700; }
+.term .c0 { color:#A8C7F0; }
+.term .c1 { color:#D0B8E8; }
+.term .sm { color:#D7C18B; }
+.term .future { opacity:.38; }
+
+svg { width:100%; height:auto; display:block; }
+.corebg { fill:#FBFCFE; stroke:#CBD5E1; stroke-width:1.2; }
+.coretitle { font:800 15px Arial; fill:var(--core); letter-spacing:.06em; }
+.asm { font:600 12px Consolas,monospace; fill:var(--ink); }
+.blk { fill:#F3F6FA; stroke:#9EADBF; stroke-width:1.45; }
+.blk.on, g.on > .blk { fill:#fff; stroke:var(--core); stroke-width:2.1; }
+.blk.cur, g.cur > .blk {
+  fill:#fff; stroke:var(--core); stroke-width:3;
+  filter:drop-shadow(0 1px 2px rgba(20,35,55,.16));
+}
+.memblk { fill:#F7F8FA; stroke:#9AA9BA; stroke-width:1.5; }
+.bt { font:700 12px Arial; fill:#20354D; text-anchor:middle; }
+.bt.s { font-size:11px; }
+.bv { font:700 12px Consolas,monospace; fill:var(--core); text-anchor:middle; }
+.bv.s { font-size:10.5px; }
+.mt { font:10px Arial; fill:var(--muted); text-anchor:middle; }
+.port,.small { font:9.5px Arial; fill:#53677F; }
+.tag { font:700 10px Consolas,monospace; fill:#87501A; text-anchor:middle; opacity:0; }
+.tag.show { opacity:1; }
+.wire { fill:none; stroke:#B9C5D3; stroke-width:1.6; opacity:.9; }
+.wire.const { stroke:#B9C7DD; opacity:1; }
+.wire.pend {
+  stroke:color-mix(in srgb,var(--core) 30%,white);
+  stroke-width:2; opacity:1; stroke-dasharray:5 4;
+}
+.wire.done { stroke:var(--core); stroke-width:2.6; opacity:1; }
+.wire.live { stroke:var(--core); stroke-width:3.2; opacity:1; }
+.wire.done,.wire.live { marker-end:var(--mk); }
+
+.tok rect { fill:var(--core); rx:6; }
+.tok text { font:700 10.5px Consolas,monospace; fill:#fff; text-anchor:middle; }
+.lbl rect { fill:#fff; stroke:var(--core); stroke-width:1; rx:5; }
+.lbl text { font:700 9.5px Consolas,monospace; fill:var(--core); text-anchor:middle; }
+
+.haltmask { display:none; }
+.haltmask.show { display:block; }
+.haltmask rect { fill:rgba(239,243,248,.88); }
+.haltmask text { font:800 26px Arial; fill:#63758B; text-anchor:middle; letter-spacing:.2em; }
+.haltmask text.sub { font:600 13px Arial; letter-spacing:0; }
+
+.cell text { font:11px Consolas,monospace; fill:var(--ink); }
+.cell rect { fill:#fff; stroke:#B9C5D3; rx:4; }
+.cell.rd0 rect { stroke:var(--c0); stroke-width:2.2; }
+.cell.rd1 rect { stroke:var(--c1); stroke-width:2.2; }
+.cell.wr0 rect { stroke:var(--c0); stroke-width:2.2; stroke-dasharray:4 3; fill:var(--c0soft); }
+.cell.wr1 rect { stroke:var(--c1); stroke-width:2.2; stroke-dasharray:4 3; fill:var(--c1soft); }
+.cell.chg rect { fill:#E5EDF7; stroke:#56779F; stroke-width:2; }
+
+.empty { padding:30px; text-align:center; color:var(--muted); }
+
+@media(max-width:1100px) {
+  .side { grid-template-columns:1fr 1fr; }
+  .side .card:last-child { grid-column:1/-1; }
+}
+@media(max-width:700px) {
+  .bar { position:static; }
+  .explrow { grid-template-columns:1fr; }
+  .side { grid-template-columns:1fr; }
+  .side .card:last-child { grid-column:auto; }
+  .diagram-toolbar { align-items:flex-start; flex-direction:column; }
+  .pos { text-align:left; min-width:100%; }
+}
 </style>
 </head>
 <body>
 <div id="app">
   <div class="bar">
-    <button id="bFirst" title="Reset to first tick (Home)">⏮</button>
-    <button id="bPrev" title="Step back (←)">◀</button>
-    <button id="bPlay" class="play" title="Play / pause (space)">▶</button>
-    <button id="bNext" title="Step forward (→)">▶|</button>
-    <button id="bLast" title="Jump to end (End)">⏭</button>
+    <button id="bFirst" title="Reset to first tick (Home)">Reset</button>
+    <button id="bPrev" title="Step back (Left arrow)">Back</button>
+    <button id="bPlay" class="play" title="Play / pause (Space)">Play</button>
+    <button id="bNext" title="Step forward (Right arrow)">Next</button>
+    <button id="bLast" title="Jump to end (End)">End</button>
     <select id="mode" title="Step size">
       <option value="stage">Step: stage</option>
       <option value="tick">Step: tick</option>
@@ -133,271 +246,462 @@
     <input id="scrub" type="range" min="0" value="0">
     <span class="pos" id="pos"></span>
   </div>
+
   <div class="stages" id="stages"></div>
   <div class="stagetitle" id="stageTitle"></div>
+
   <div class="explrow">
     <div class="explain k0" id="ex0"></div>
     <div class="explain k1" id="ex1"></div>
   </div>
+
   <div class="grid">
-    <div class="card">__SVG__</div>
+    <div class="card diagram-card">
+      <div class="diagram-toolbar">
+        <div>
+          <strong>Processor datapath</strong>
+          <span>Core 0 and Core 1 with shared data memory</span>
+        </div>
+        <div class="zoom-controls">
+          <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+          <button id="zoomReset" type="button">Fit</button>
+          <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
+          <span id="zoomLabel">100%</span>
+        </div>
+      </div>
+      <div class="diagram-viewport" id="diagramViewport">
+        <div class="diagram-stage" id="diagramStage">__SVG__</div>
+      </div>
+    </div>
+
     <div class="side">
-      <div class="card"><h4>Private registers (8 × 8-bit)</h4><div class="regs" id="regs"></div></div>
-      <div class="card"><h4>Instruction memory (current PC highlighted)</h4>
-        <div class="progs"><div class="prog" id="prog0"></div><div class="prog" id="prog1"></div></div></div>
-      <div class="card"><h4>Execution log (like <code>python -m dualcore.demo</code>; click a tick)</h4>
-        <div class="term" id="term"></div></div>
+      <div class="card">
+        <h4>Private registers (8 × 8-bit)</h4>
+        <div class="regs" id="regs"></div>
+      </div>
+      <div class="card">
+        <h4>Instruction memory (current PC highlighted)</h4>
+        <div class="progs">
+          <div class="prog" id="prog0"></div>
+          <div class="prog" id="prog1"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Execution log (select a tick to jump to it)</h4>
+        <div class="term" id="term"></div>
+      </div>
     </div>
   </div>
 </div>
+
 <script>
 const DATA = __DATA__;
 const STAGES = DATA.stages;
 const NS = "http://www.w3.org/2000/svg";
 const $ = id => document.getElementById(id);
 const T = DATA.ticks.length;
-const total = Math.max(1, T * STAGES.length);
+const total = Math.max(1,T*STAGES.length);
 let step = 0, playing = false, timer = null, anim = [];
+let diagramZoom = 1;
 
-document.querySelectorAll(".core").forEach((g, i) => g.style.setProperty("--mk", `url(#arr-c${i})`));
+function setDiagramZoom(value) {
+  diagramZoom = Math.max(.75,Math.min(1.8,value));
+  $("diagramStage").style.width = `${diagramZoom*100}%`;
+  $("zoomLabel").textContent = `${Math.round(diagramZoom*100)}%`;
+}
+$("zoomOut").onclick = () => setDiagramZoom(diagramZoom-.1);
+$("zoomIn").onclick = () => setDiagramZoom(diagramZoom+.1);
+$("zoomReset").onclick = () => setDiagramZoom(1);
+
+document.querySelectorAll(".core").forEach((g,i) =>
+  g.style.setProperty("--mk",`url(#arr-c${i})`)
+);
 
 if (!T) {
-  document.querySelector(".grid").innerHTML = '<div class="card empty">No ticks to show.</div>';
+  document.querySelector(".grid").innerHTML =
+    '<div class="card empty">No ticks to show.</div>';
 }
 
-// ---------- static pieces ----------
-$("stages").innerHTML = STAGES.map((s, i) => `<span data-i="${i}">${i + 1}. ${s}</span>`).join("");
-$("stages").onclick = e => { const i = e.target.dataset.i; if (i !== undefined) go(tickOf(step) * STAGES.length + (+i), false); };
-$("scrub").max = total - 1;
-[0, 1].forEach(c => {
-  $("prog" + c).innerHTML = `<div style="font-weight:700;color:var(--c${c})">Core ${c}</div>` +
-    DATA.programs[c].map((p, i) => `<div data-pc="${i}">${String(i).padStart(2)}  ${p}</div>`).join("");
-});
-let termHtml = "";
-DATA.ticks.forEach((t, i) => {
-  termHtml += `<span class="t hd" data-t="${i}">tick ${t.cycle}:</span>`;
-  t.cores.forEach((c, k) => termHtml += `<span class="t c${k}" data-t="${i}">   ${esc(c.line)}</span>`);
-  t.summary.forEach(s => termHtml += `<span class="t sm" data-t="${i}">   ${esc(s)}</span>`);
-});
-if (DATA.error) termHtml += `<span class="t sm">${esc(DATA.error)}</span>`;
-$("term").innerHTML = termHtml;
-$("term").onclick = e => { const t = e.target.dataset.t; if (t !== undefined) go(+t * STAGES.length, false); };
+$("stages").innerHTML = STAGES.map((s,i) =>
+  `<span data-i="${i}">${i+1}. ${s}</span>`
+).join("");
 
-function esc(s) { return String(s).replace(/[&<>]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch])); }
-function tickOf(s) { return Math.floor(s / STAGES.length); }
-function stageOf(s) { return s % STAGES.length; }
+$("stages").onclick = e => {
+  const i=e.target.dataset.i;
+  if(i!==undefined) go(tickOf(step)*STAGES.length+(+i),false);
+};
 
-// ---------- rendering ----------
+$("scrub").max=total-1;
+
+[0,1].forEach(c=>{
+  $("prog"+c).innerHTML =
+    `<div style="font-weight:700;color:var(--c${c})">Core ${c}</div>`+
+    DATA.programs[c].map((p,i)=>
+      `<div data-pc="${i}">${String(i).padStart(2)}  ${esc(p)}</div>`
+    ).join("");
+});
+
+let termHtml="";
+DATA.ticks.forEach((t,i)=>{
+  termHtml+=`<span class="t hd" data-t="${i}">tick ${t.cycle}:</span>`;
+  t.cores.forEach((c,k)=>
+    termHtml+=`<span class="t c${k}" data-t="${i}">   ${esc(c.line)}</span>`
+  );
+  t.summary.forEach(s=>
+    termHtml+=`<span class="t sm" data-t="${i}">   ${esc(s)}</span>`
+  );
+});
+if(DATA.error) termHtml+=`<span class="t sm">${esc(DATA.error)}</span>`;
+$("term").innerHTML=termHtml;
+
+$("term").onclick=e=>{
+  const t=e.target.dataset.t;
+  if(t!==undefined) go(+t*STAGES.length,false);
+};
+
+function esc(s) {
+  return String(s).replace(/[&<>]/g,ch=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;"
+  }[ch]));
+}
+function tickOf(s){return Math.floor(s/STAGES.length);}
+function stageOf(s){return s%STAGES.length;}
+
+// Rendering
 function render(animate) {
-  anim.forEach(cancelAnimationFrame); anim = [];
-  if (!T) return;
-  const t = tickOf(step), st = stageOf(step), tick = DATA.ticks[t];
-  $("scrub").value = step;
-  $("pos").textContent = `tick ${tick.cycle}/${DATA.ticks[T - 1].cycle} · stage ${st + 1}/6`;
-  document.querySelectorAll("#stages span").forEach((el, i) =>
-    el.className = i < st ? "done" : i === st ? "cur" : "");
-  $("stageTitle").textContent = `Clock tick ${tick.cycle} — stage ${st + 1}: ${STAGES[st]}`;
-  tick.cores.forEach((core, c) => renderCore(c, core, st, animate));
-  renderMemory(tick, st);
-  renderRegs(tick, st);
-  renderProgs(tick, st);
+  anim.forEach(cancelAnimationFrame);
+  anim=[];
+  if(!T)return;
+
+  const t=tickOf(step), st=stageOf(step), tick=DATA.ticks[t];
+  $("scrub").value=step;
+  $("pos").textContent=
+    `tick ${tick.cycle}/${DATA.ticks[T-1].cycle} · stage ${st+1}/6`;
+
+  document.querySelectorAll("#stages span").forEach((el,i)=>
+    el.className=i<st?"done":i===st?"cur":""
+  );
+
+  $("stageTitle").textContent=
+    `Clock tick ${tick.cycle} — stage ${st+1}: ${STAGES[st]}`;
+
+  tick.cores.forEach((core,c)=>renderCore(c,core,st,animate));
+  renderMemory(tick,st);
+  renderRegs(tick,st);
+  renderProgs(tick,st);
   renderTerm(t);
 }
 
-function renderCore(c, core, st, animate) {
-  const id = x => $(`c${c}-${x}`);
-  const info = core.info;
-  $(`ex${c}`).innerHTML = `<b>Core ${c}${info.halted ? " — halted" : " — " + esc(core.asm || "")}</b>${esc(core.stages[st])}`;
-  id("halt").classList.toggle("show", !!info.halted);
-  if (info.halted) id("haltpc").textContent = `PC frozen at ${info.pc}`;
-  // block values
-  const pcShown = (!info.halted && st === 5 && !info.halt) ? info.next_pc : info.pc;
-  id("v-pc").textContent = pcShown;
-  id("asm").textContent = info.halted ? "" : info.asm;
-  id("v-im").textContent = info.halted ? "" : info.im;
-  id("v-cu").textContent = (!info.halted && st >= 1) ? info.cu : "";
-  id("v-imm").textContent = (!info.halted && st >= 1) ? info.imm : "";
-  id("v-alu").textContent = (!info.halted && st >= 2) ? info.alu : "";
-  // blocks
-  ["pc", "add", "im", "cu", "rf", "imm", "alusrc", "alu", "badd", "pcsrc", "jmux", "memtoreg"]
-    .forEach(b => id("b-" + b).classList.remove("on", "cur"));
-  if (!info.halted) {
-    for (let s = 0; s <= st; s++) (info.blocks[s] || []).forEach(b => {
-      const el = id("b-" + b); el.classList.add("on"); if (s === st) el.classList.add("cur");
-    });
+function renderCore(c,core,st,animate) {
+  const id=x=>$(`c${c}-${x}`);
+  const info=core.info;
+
+  $(`ex${c}`).innerHTML=
+    `<b>Core ${c}${info.halted?" — halted":" — "+esc(core.asm||"")}</b>`+
+    esc(core.stages[st]);
+
+  id("halt").classList.toggle("show",!!info.halted);
+  if(info.halted) id("haltpc").textContent=`PC frozen at ${info.pc}`;
+
+  const pcShown=(!info.halted&&st===5&&!info.halt)?info.next_pc:info.pc;
+  id("v-pc").textContent=pcShown;
+  id("asm").textContent=info.halted?"":info.asm;
+  id("v-im").textContent=info.halted?"":info.im;
+  id("v-cu").textContent=(!info.halted&&st>=1)?info.cu:"";
+  id("v-imm").textContent=(!info.halted&&st>=1)?info.imm:"";
+  id("v-alu").textContent=(!info.halted&&st>=2)?info.alu:"";
+
+  ["pc","add","im","cu","rf","imm","alusrc","alu","badd",
+   "pcsrc","jmux","memtoreg"].forEach(b=>
+    id("b-"+b).classList.remove("on","cur")
+  );
+
+  if(!info.halted) {
+    for(let s=0;s<=st;s++)
+      (info.blocks[s]||[]).forEach(b=>{
+        const el=id("b-"+b);
+        el.classList.add("on");
+        if(s===st) el.classList.add("cur");
+      });
   }
-  // tags (control signals appear once decoded)
-  document.querySelectorAll(`#c${c} .tag`).forEach(el => {
-    const name = el.id.split("-t-")[1];
-    const txt = info.tags ? info.tags[name] : "";
-    el.textContent = txt || "";
-    el.classList.toggle("show", !info.halted && st >= 1 && !!txt);
+
+  document.querySelectorAll(`#c${c} .tag`).forEach(el=>{
+    const name=el.id.split("-t-")[1];
+    const txt=info.tags?info.tags[name]:"";
+    el.textContent=txt||"";
+    el.classList.toggle("show",!info.halted&&st>=1&&!!txt);
   });
-  // wires
-  const layer = id("tokens"); layer.innerHTML = "";
-  document.querySelectorAll(`#c${c} .wire[data-stage]`).forEach(p => {
-    const wid = p.id.slice(3), ws = +p.dataset.stage, label = core.wires[wid];
-    p.classList.remove("pend", "done", "live");
-    if (label === undefined) return;
-    if (ws < st) { p.classList.add("done"); addLabel(layer, p, label, false); }
-    else if (ws === st) {
+
+  const layer=id("tokens");
+  layer.innerHTML="";
+
+  document.querySelectorAll(`#c${c} .wire[data-stage]`).forEach(p=>{
+    const wid=p.id.slice(3), ws=+p.dataset.stage;
+    const label=core.wires[wid];
+    p.classList.remove("pend","done","live");
+    if(label===undefined)return;
+
+    if(ws<st) {
+      p.classList.add("done");
+      addLabel(layer,p,label,false);
+    } else if(ws===st) {
       p.classList.add("live");
-      if (animate) moveToken(layer, p, label); else addLabel(layer, p, label, true);
-    } else p.classList.add("pend");
+      if(animate) moveToken(layer,p,label);
+      else addLabel(layer,p,label,true);
+    } else {
+      p.classList.add("pend");
+    }
   });
 }
 
-function pill(layer, cls, text) {
-  const g = document.createElementNS(NS, "g"); g.setAttribute("class", cls);
-  const r = document.createElementNS(NS, "rect"), tx = document.createElementNS(NS, "text");
-  tx.textContent = text; g.append(r, tx); layer.append(g);
-  const w = Math.max(18, text.length * 6.4 + 8), h = cls === "tok" ? 16 : 14;
-  r.setAttribute("width", w); r.setAttribute("height", h); r.setAttribute("x", -w / 2); r.setAttribute("y", -h / 2);
-  tx.setAttribute("y", 3.5);
+function pill(layer,cls,text) {
+  const g=document.createElementNS(NS,"g");
+  g.setAttribute("class",cls);
+
+  const r=document.createElementNS(NS,"rect");
+  const tx=document.createElementNS(NS,"text");
+  tx.textContent=text;
+  g.append(r,tx);
+  layer.append(g);
+
+  const w=Math.max(18,text.length*6.4+8);
+  const h=cls==="tok"?16:14;
+  r.setAttribute("width",w);
+  r.setAttribute("height",h);
+  r.setAttribute("x",-w/2);
+  r.setAttribute("y",-h/2);
+  tx.setAttribute("y",3.5);
   return g;
 }
+
 function labelPoint(p) {
-  // Parked label position along the wire (data-lf, chosen in datapath_svg.py).
-  return p.getPointAtLength(p.getTotalLength() * (+p.dataset.lf || 0.5));
+  return p.getPointAtLength(p.getTotalLength()*(+p.dataset.lf||.5));
 }
-function addLabel(layer, p, text, strong) {
-  const g = pill(layer, strong ? "tok" : "lbl", text), pt = labelPoint(p);
-  g.setAttribute("transform", `translate(${pt.x} ${pt.y})`);
+
+function addLabel(layer,p,text,strong) {
+  const g=pill(layer,strong?"tok":"lbl",text);
+  const pt=labelPoint(p);
+  g.setAttribute("transform",`translate(${pt.x} ${pt.y})`);
 }
-function moveToken(layer, p, text) {
-  const g = pill(layer, "tok", text), L = p.getTotalLength(), end = labelPoint(p);
-  const dur = Math.max(150, +$("speed").value * 0.75), t0 = performance.now();
-  const frame = now => {
-    const k = Math.min(1, (now - t0) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-    const pt = k < 1 ? p.getPointAtLength(L * e) : end;
-    g.setAttribute("transform", `translate(${pt.x} ${pt.y})`);
-    if (k < 1) anim.push(requestAnimationFrame(frame));
+
+function moveToken(layer,p,text) {
+  const g=pill(layer,"tok",text);
+  const L=p.getTotalLength(), end=labelPoint(p);
+  const dur=Math.max(150,+$("speed").value*.75);
+  const t0=performance.now();
+
+  const frame=now=>{
+    const k=Math.min(1,(now-t0)/dur);
+    const e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+    const pt=k<1?p.getPointAtLength(L*e):end;
+    g.setAttribute("transform",`translate(${pt.x} ${pt.y})`);
+    if(k<1) anim.push(requestAnimationFrame(frame));
   };
   anim.push(requestAnimationFrame(frame));
 }
 
-function renderMemory(tick, st) {
-  const layer = $("mem-cells"); layer.innerHTML = "";
-  const committed = st >= 4;
-  const mem = committed ? tick.mem_after : tick.mem_before;
-  const x = 790, y0 = 322, rowH = 21, maxRows = 12;
-  const changed = new Set(tick.mem_changes);
-  let addrs = DATA.watch.slice();
-  const touched = tick.cores.map(c => c.info.mem_addr).filter(a => a !== null && a !== undefined);
-  if (addrs.length > maxRows) addrs = [...new Set([...touched, ...addrs])].slice(0, maxRows).sort((a, b) => a - b);
-  const head = document.createElementNS(NS, "text");
-  head.setAttribute("x", 847); head.setAttribute("y", y0 - 8); head.setAttribute("class", "small");
-  head.textContent = committed ? "after tick (committed)" : "start of tick";
+function renderMemory(tick,st) {
+  const layer=$("mem-cells");
+  layer.innerHTML="";
+  const committed=st>=4;
+  const mem=committed?tick.mem_after:tick.mem_before;
+  const x=790,y0=322,rowH=21,maxRows=12;
+  const changed=new Set(tick.mem_changes);
+  let addrs=DATA.watch.slice();
+
+  const touched=tick.cores.map(c=>c.info.mem_addr)
+    .filter(a=>a!==null&&a!==undefined);
+
+  if(addrs.length>maxRows)
+    addrs=[...new Set([...touched,...addrs])]
+      .slice(0,maxRows).sort((a,b)=>a-b);
+
+  const head=document.createElementNS(NS,"text");
+  head.setAttribute("x",847);
+  head.setAttribute("y",y0-8);
+  head.setAttribute("class","small");
+  head.textContent=committed?"after tick (committed)":"start of tick";
   layer.append(head);
-  addrs.forEach((a, i) => {
-    const g = document.createElementNS(NS, "g");
-    let cls = "cell";
-    tick.cores.forEach((c, k) => {
-      const inf = c.info;
-      if (inf.halted || inf.mem_addr !== a || st < 3) return;
-      if (inf.mem_read) cls += ` rd${k}`;
-      if (inf.mem_write && !committed) cls += ` wr${k}`;
+
+  addrs.forEach((a,i)=>{
+    const g=document.createElementNS(NS,"g");
+    let cls="cell";
+
+    tick.cores.forEach((c,k)=>{
+      const inf=c.info;
+      if(inf.halted||inf.mem_addr!==a||st<3)return;
+      if(inf.mem_read)cls+=` rd${k}`;
+      if(inf.mem_write&&!committed)cls+=` wr${k}`;
     });
-    if (committed && changed.has(a)) cls += " chg";
-    g.setAttribute("class", cls);
-    g.setAttribute("transform", `translate(${x} ${y0 + i * rowH})`);
-    g.innerHTML = `<rect width="114" height="18"/><text x="6" y="13">[${String(a).padStart(3)}]</text>` +
-                  `<text x="108" y="13" text-anchor="end">${mem[a]}</text>`;
+
+    if(committed&&changed.has(a))cls+=" chg";
+    g.setAttribute("class",cls);
+    g.setAttribute("transform",`translate(${x} ${y0+i*rowH})`);
+    g.innerHTML=
+      `<rect width="114" height="18"/>`+
+      `<text x="6" y="13">[${String(a).padStart(3)}]</text>`+
+      `<text x="108" y="13" text-anchor="end">${mem[a]}</text>`;
     layer.append(g);
   });
-  if (!DATA.watch.length) {
-    const t = document.createElementNS(NS, "text");
-    t.setAttribute("x", 847); t.setAttribute("y", y0 + 20); t.setAttribute("class", "small");
-    t.textContent = "(no memory used)"; layer.append(t);
+
+  if(!DATA.watch.length) {
+    const t=document.createElementNS(NS,"text");
+    t.setAttribute("x",847);
+    t.setAttribute("y",y0+20);
+    t.setAttribute("class","small");
+    t.textContent="(no memory used)";
+    layer.append(t);
   }
-  [0, 1].forEach(k => {
-    const inf = tick.cores[k].info, el = $(`mem-sig${k}`);
-    el.textContent = (!inf.halted && inf.mem) ? inf.mem : "";
-    el.classList.toggle("show", !inf.halted && !!inf.mem && st >= 1);
+
+  [0,1].forEach(k=>{
+    const inf=tick.cores[k].info,el=$(`mem-sig${k}`);
+    el.textContent=(!inf.halted&&inf.mem)?inf.mem:"";
+    el.classList.toggle("show",!inf.halted&&!!inf.mem&&st>=1);
   });
 }
 
-function renderRegs(tick, st) {
-  const after = st >= 4;
-  let html = '<div class="h"></div>' + [...Array(8).keys()].map(i => `<div class="h">R${i}</div>`).join("");
-  [0, 1].forEach(c => {
-    const regs = after ? tick.regs_after[c] : tick.regs_before[c];
-    html += `<div class="n" style="color:var(--c${c})">Core ${c}</div>`;
-    regs.forEach((v, i) => {
-      const flash = after && tick.regs_before[c][i] !== v;
-      html += `<div class="${flash ? "flash" : ""}" title="${v} = 0b${v.toString(2).padStart(8, "0")}">${v}</div>`;
+function renderRegs(tick,st) {
+  const after=st>=4;
+  let html='<div class="h"></div>'+
+    [...Array(8).keys()].map(i=>`<div class="h">R${i}</div>`).join("");
+
+  [0,1].forEach(c=>{
+    const regs=after?tick.regs_after[c]:tick.regs_before[c];
+    html+=`<div class="n" style="color:var(--c${c})">Core ${c}</div>`;
+
+    regs.forEach((v,i)=>{
+      const flash=after&&tick.regs_before[c][i]!==v;
+      html+=`<div class="${flash?"flash":""}" title="${v} = 0b${v.toString(2).padStart(8,"0")}">${v}</div>`;
     });
   });
-  $("regs").innerHTML = html;
+  $("regs").innerHTML=html;
 }
 
 function renderProgs(tick, st) {
   [0, 1].forEach(c => {
+    const box = $("prog" + c);
     const info = tick.cores[c].info;
-    const pc = (st === 5 && !info.halted && !info.halt) ? info.next_pc : info.pc;
-    $("prog" + c).querySelectorAll("div[data-pc]").forEach(d => {
+    const pc = (st === 5 && !info.halted && !info.halt)
+      ? info.next_pc
+      : info.pc;
+
+    box.querySelectorAll("div[data-pc]").forEach(d => {
       const on = +d.dataset.pc === pc;
       d.className = on ? `at${c}` : "";
-      if (on) d.scrollIntoView({ block: "nearest" });
+
+      // Scroll only inside this program panel.
+      // Do not use scrollIntoView(), because it can move the whole page.
+      if (on) {
+        const rowRect = d.getBoundingClientRect();
+        const boxRect = box.getBoundingClientRect();
+
+        if (rowRect.top < boxRect.top) {
+          box.scrollTop -= boxRect.top - rowRect.top;
+        } else if (rowRect.bottom > boxRect.bottom) {
+          box.scrollTop += rowRect.bottom - boxRect.bottom;
+        }
+      }
     });
   });
 }
 
 function renderTerm(t) {
-  let curEl = null;
-  $("term").querySelectorAll(".t[data-t]").forEach(el => {
-    const k = +el.dataset.t;
-    el.classList.toggle("cur", k === t);
-    el.classList.toggle("future", k > t);
-    if (k === t && !curEl) curEl = el;
+  let curEl=null;
+
+  $("term").querySelectorAll(".t[data-t]").forEach(el=>{
+    const k=+el.dataset.t;
+    el.classList.toggle("cur",k===t);
+    el.classList.toggle("future",k>t);
+    if(k===t&&!curEl)curEl=el;
   });
-  if (curEl) {
-    const box = $("term"), top = curEl.offsetTop - box.offsetTop;
-    if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - 60) box.scrollTop = top - 40;
+
+  if(curEl) {
+    const box=$("term");
+    const top=curEl.offsetTop-box.offsetTop;
+    if(top<box.scrollTop||top>box.scrollTop+box.clientHeight-60)
+      box.scrollTop=top-40;
   }
 }
 
-// ---------- navigation ----------
-// Remember the position per program, so a Streamlit rerun (which rebuilds this
-// iframe) does not throw the viewer back to tick 1.
-const KEY = "dp-step-" + T + "-" + JSON.stringify(DATA.programs).length + "-" + DATA.watch.join(".");
-function save() { try { sessionStorage.setItem(KEY, String(step)); } catch (e) {} }
-function restore() { try { return +(sessionStorage.getItem(KEY) || 0); } catch (e) { return 0; } }
-function go(s, animate) { step = Math.max(0, Math.min(total - 1, s)); save(); render(animate); }
-function stepSize() { return $("mode").value === "tick" ? STAGES.length : 1; }
-function next(animate = true) {
-  if (step >= total - 1) { pause(); return; }
-  const n = stepSize() === 1 ? step + 1 : Math.min(total - 1, (tickOf(step) + 1) * STAGES.length + STAGES.length - 1);
-  go(n, animate && stepSize() === 1);
+// Navigation
+const KEY="dp-step-"+T+"-"+JSON.stringify(DATA.programs).length+"-"+DATA.watch.join(".");
+
+function save() {
+  try { sessionStorage.setItem(KEY,String(step)); } catch(e) {}
+}
+function restore() {
+  try { return +(sessionStorage.getItem(KEY)||0); }
+  catch(e) { return 0; }
+}
+function go(s,animate) {
+  step=Math.max(0,Math.min(total-1,s));
+  save();
+  render(animate);
+}
+function stepSize() {
+  return $("mode").value==="tick"?STAGES.length:1;
+}
+function next(animate=true) {
+  if(step>=total-1) { pause(); return; }
+
+  const n=stepSize()===1
+    ?step+1
+    :Math.min(total-1,(tickOf(step)+1)*STAGES.length+STAGES.length-1);
+
+  go(n,animate&&stepSize()===1);
 }
 function prev() {
-  const n = stepSize() === 1 ? step - 1 : (tickOf(step) - 1) * STAGES.length + STAGES.length - 1;
-  go(Math.max(0, n), false);
+  const n=stepSize()===1
+    ?step-1
+    :(tickOf(step)-1)*STAGES.length+STAGES.length-1;
+  go(Math.max(0,n),false);
 }
 function play() {
-  if (step >= total - 1) go(0, false);
-  playing = true; $("bPlay").textContent = "⏸";
-  const tickFn = () => { next(true); if (playing) timer = setTimeout(tickFn, +$("speed").value); };
-  timer = setTimeout(tickFn, +$("speed").value * 0.4);
-}
-function pause() { playing = false; clearTimeout(timer); $("bPlay").textContent = "▶"; }
+  if(step>=total-1)go(0,false);
+  playing=true;
+  $("bPlay").textContent="Pause";
 
-$("bFirst").onclick = () => { pause(); go(0, false); };
-$("bLast").onclick = () => { pause(); go(total - 1, false); };
-$("bPrev").onclick = () => { pause(); prev(); };
-$("bNext").onclick = () => { pause(); next(true); };
-$("bPlay").onclick = () => playing ? pause() : play();
-$("scrub").oninput = e => { pause(); go(+e.target.value, false); };
-document.addEventListener("keydown", e => {
-  if (e.target.tagName === "SELECT") return;
-  if (e.key === "ArrowRight") { pause(); next(true); e.preventDefault(); }
-  else if (e.key === "ArrowLeft") { pause(); prev(); e.preventDefault(); }
-  else if (e.key === " ") { playing ? pause() : play(); e.preventDefault(); }
-  else if (e.key === "Home") { pause(); go(0, false); }
-  else if (e.key === "End") { pause(); go(total - 1, false); }
+  const tickFn=()=>{
+    next(true);
+    if(playing)timer=setTimeout(tickFn,+$("speed").value);
+  };
+  timer=setTimeout(tickFn,+$("speed").value*.4);
+}
+function pause() {
+  playing=false;
+  clearTimeout(timer);
+  $("bPlay").textContent="Play";
+}
+
+$("bFirst").onclick=()=>{pause();go(0,false);};
+$("bLast").onclick=()=>{pause();go(total-1,false);};
+$("bPrev").onclick=()=>{pause();prev();};
+$("bNext").onclick=()=>{pause();next(true);};
+$("bPlay").onclick=()=>playing?pause():play();
+
+$("scrub").oninput=e=>{
+  pause();
+  go(+e.target.value,false);
+};
+
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="SELECT")return;
+
+  if(e.key==="ArrowRight") {
+    pause();next(true);e.preventDefault();
+  } else if(e.key==="ArrowLeft") {
+    pause();prev();e.preventDefault();
+  } else if(e.key===" ") {
+    playing?pause():play();e.preventDefault();
+  } else if(e.key==="Home") {
+    pause();go(0,false);
+  } else if(e.key==="End") {
+    pause();go(total-1,false);
+  }
 });
-step = Math.max(0, Math.min(total - 1, restore()));
-render(step === 0);
+
+step=Math.max(0,Math.min(total-1,restore()));
+render(step===0);
 </script>
 </body>
 </html>
